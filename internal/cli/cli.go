@@ -23,6 +23,8 @@ import (
 
 	sensorclient "github.com/argoproj/argo-events/pkg/client/sensor/clientset/versioned"
 	sinformerv1alpha1 "github.com/argoproj/argo-events/pkg/client/sensor/informers/externalversions"
+
+	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 )
 
 var (
