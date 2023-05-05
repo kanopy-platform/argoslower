@@ -8,6 +8,12 @@ RUN ?= .*
 PKG ?= ./...
 
 
+.PHONY: lint-pipeline
+lint-pipeline:
+	black .drone.star
+	flake8 .drone.star
+
+
 .PHONY: test
 test: tidy ## Run tests in local environment
 	golangci-lint run --timeout=5m $(PKG)
