@@ -4,23 +4,26 @@ import (
 	"fmt"
 	"strconv"
 
+	sensor "github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
 	corev1Listers "k8s.io/client-go/listers/core/v1"
 )
 
 type NamespaceInfo struct {
-	lister              corev1Listers.NamespaceLister
-	rateLimitAnnotation string
+	lister                    corev1Listers.NamespaceLister
+	rateLimitUnitAnnotation   string
+	requestsPerUnitAnnotation string
 }
 
-func NewNamespaceInfo(lister corev1Listers.NamespaceLister, rateLimitAnnotation string) *NamespaceInfo {
+func NewNamespaceInfo(lister corev1Listers.NamespaceLister, rateLimitUnitAnnotation, requestsPerUnitAnnotation string) *NamespaceInfo {
 	return &NamespaceInfo{
-		lister:              lister,
-		rateLimitAnnotation: rateLimitAnnotation,
+		lister:                    lister,
+		rateLimitUnitAnnotation:   rateLimitUnitAnnotation,
+		requestsPerUnitAnnotation: requestsPerUnitAnnotation,
 	}
 }
 
-// Retrieves the namespace and extracts the rate-limit annotation value if exists, nil otherwise.
-func (n *NamespaceInfo) RateLimit(namespace string) (*int, error) {
+// Retrieves the namespace RateLimit values if exists, nil otherwise.
+func (n *NamespaceInfo) RateLimit(namespace string) (*sensor.RateLimit, error) {
 	if namespace == "" {
 		return nil, fmt.Errorf("invalid namespace; %q", namespace)
 	}
@@ -30,14 +33,30 @@ func (n *NamespaceInfo) RateLimit(namespace string) (*int, error) {
 		return nil, err
 	}
 
-	if val, ok := ns.Annotations[n.rateLimitAnnotation]; ok {
-		rateLimit, err := strconv.Atoi(val)
+	result := sensor.RateLimit{}
+
+	if val, ok := ns.Annotations[n.rateLimitUnitAnnotation]; ok {
+		unit := sensor.RateLimiteUnit(val)
+		switch unit {
+		case sensor.Second, sensor.Minute, sensor.Hour:
+			result.Unit = unit
+		default:
+			return nil, fmt.Errorf("invalid %s: %s", n.rateLimitUnitAnnotation, val)
+		}
+	} else {
+		result.Unit = sensor.Second
+	}
+
+	if str, ok := ns.Annotations[n.requestsPerUnitAnnotation]; ok {
+		val, err := strconv.Atoi(str)
 		if err != nil {
 			return nil, err
 		}
-
-		return &rateLimit, nil
+		result.RequestsPerUnit = int32(val)
+	} else {
+		// return nil indicating requestsPerUnit not set
+		return nil, nil
 	}
 
-	return nil, nil
+	return &result, nil
 }

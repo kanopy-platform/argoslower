@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"testing"
 
+	sensor "github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	corev1Listers "k8s.io/client-go/listers/core/v1"
-	"k8s.io/utils/pointer"
 )
 
 type MockNamespaceLister struct {
@@ -38,19 +38,21 @@ func (m *MockNamespaceLister) Get(name string) (*corev1.Namespace, error) {
 func TestRateLimit(t *testing.T) {
 	t.Parallel()
 
-	rateLimitAnnotation := "kanopy-platform/events-rate-limit"
+	rateLimitUnitAnnotation := "rate-limit-unit"
+	requestsPerUnitAnnotation := "requests-per-unit"
 
-	userNamespaceWithAnnotation := map[string]*corev1.Namespace{
+	correctAnnotations := map[string]*corev1.Namespace{
 		"user": &corev1.Namespace{
 			ObjectMeta: v1.ObjectMeta{
 				Annotations: map[string]string{
-					rateLimitAnnotation: "10",
+					rateLimitUnitAnnotation:   "Minute",
+					requestsPerUnitAnnotation: "10",
 				},
 			},
 		},
 	}
 
-	userNamespaceWithoutAnnotation := map[string]*corev1.Namespace{
+	missingAnnotations := map[string]*corev1.Namespace{
 		"user": &corev1.Namespace{
 			ObjectMeta: v1.ObjectMeta{
 				Annotations: map[string]string{
@@ -60,11 +62,31 @@ func TestRateLimit(t *testing.T) {
 		},
 	}
 
-	userNamespaceWithInvalidAnnotation := map[string]*corev1.Namespace{
+	missingUnitAnnotation := map[string]*corev1.Namespace{
 		"user": &corev1.Namespace{
 			ObjectMeta: v1.ObjectMeta{
 				Annotations: map[string]string{
-					rateLimitAnnotation: "abc123",
+					requestsPerUnitAnnotation: "50",
+				},
+			},
+		},
+	}
+
+	invalidUnitAnnotation := map[string]*corev1.Namespace{
+		"user": &corev1.Namespace{
+			ObjectMeta: v1.ObjectMeta{
+				Annotations: map[string]string{
+					rateLimitUnitAnnotation: "Months",
+				},
+			},
+		},
+	}
+
+	invalidRequestsAnnotation := map[string]*corev1.Namespace{
+		"user": &corev1.Namespace{
+			ObjectMeta: v1.ObjectMeta{
+				Annotations: map[string]string{
+					requestsPerUnitAnnotation: "abc123",
 				},
 			},
 		},
@@ -74,28 +96,38 @@ func TestRateLimit(t *testing.T) {
 		testMsg       string
 		namespaceName string
 		mockLister    corev1Listers.NamespaceLister
-		wantRateLimit *int
+		wantResult    *sensor.RateLimit
 		wantError     bool
 	}{
 		{
-			testMsg:       "successfully extract rate limit from namespace annotation",
+			testMsg:       "successfully extract rate limit unit and requests from annotations",
 			namespaceName: "user",
 			mockLister: &MockNamespaceLister{
-				namespaces: userNamespaceWithAnnotation,
+				namespaces: correctAnnotations,
 				err:        nil,
 			},
-			wantRateLimit: pointer.Int(10),
-			wantError:     false,
+			wantResult: &sensor.RateLimit{Unit: sensor.Minute, RequestsPerUnit: 10},
+			wantError:  false,
 		},
 		{
-			testMsg:       "namespace annotation does not contain rate limit annotation",
+			testMsg:       "rate limit unit and requests annotations missing",
 			namespaceName: "user",
 			mockLister: &MockNamespaceLister{
-				namespaces: userNamespaceWithoutAnnotation,
+				namespaces: missingAnnotations,
 				err:        nil,
 			},
-			wantRateLimit: nil,
-			wantError:     false,
+			wantResult: nil,
+			wantError:  false,
+		},
+		{
+			testMsg:       "rate limit unit and annotation missing, default seconds",
+			namespaceName: "user",
+			mockLister: &MockNamespaceLister{
+				namespaces: missingUnitAnnotation,
+				err:        nil,
+			},
+			wantResult: &sensor.RateLimit{Unit: sensor.Second, RequestsPerUnit: 50},
+			wantError:  false,
 		},
 		{
 			testMsg:       "cannot find namespace",
@@ -104,27 +136,37 @@ func TestRateLimit(t *testing.T) {
 				namespaces: map[string]*corev1.Namespace{},
 				err:        fmt.Errorf("namespace not found"),
 			},
-			wantRateLimit: nil,
-			wantError:     true,
+			wantResult: nil,
+			wantError:  true,
 		},
 		{
-			testMsg:       "namespace annotation value is invalid",
+			testMsg:       "unit annotation value is invalid",
 			namespaceName: "user",
 			mockLister: &MockNamespaceLister{
-				namespaces: userNamespaceWithInvalidAnnotation,
+				namespaces: invalidUnitAnnotation,
 				err:        nil,
 			},
-			wantRateLimit: nil,
-			wantError:     true,
+			wantResult: nil,
+			wantError:  true,
+		},
+		{
+			testMsg:       "requests annotation value is invalid",
+			namespaceName: "user",
+			mockLister: &MockNamespaceLister{
+				namespaces: invalidRequestsAnnotation,
+				err:        nil,
+			},
+			wantResult: nil,
+			wantError:  true,
 		},
 	}
 
 	for _, test := range tests {
 		t.Log(test.testMsg)
-		n := NewNamespaceInfo(test.mockLister, rateLimitAnnotation)
+		n := NewNamespaceInfo(test.mockLister, rateLimitUnitAnnotation, requestsPerUnitAnnotation)
 
 		result, err := n.RateLimit(test.namespaceName)
-		assert.Equal(t, test.wantRateLimit, result)
+		assert.Equal(t, test.wantResult, result)
 		assert.Equal(t, test.wantError, err != nil)
 	}
 }
