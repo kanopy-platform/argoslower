@@ -13,6 +13,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -52,6 +54,8 @@ func NewRootCommand() *cobra.Command {
 	cmd.PersistentFlags().Int("metrics-listen-port", 8081, "Metrics listen port")
 	cmd.PersistentFlags().String("webhook-certs-dir", "/etc/webhook/certs", "Admission webhook TLS certificate directory")
 	cmd.PersistentFlags().Bool("dry-run", false, "Controller dry-run changes only")
+	cmd.PersistentFlags().String("rate-limit-unit-annotation", "kanopy-events/rate-limit-unit", "Namespace annotation for rate limit unit")
+	cmd.PersistentFlags().String("requests-per-unit-annotation", "kanopy-events/requests-per-unit", "Namespace annotation for requests per unit")
 
 	k8sFlags.AddFlags(cmd.PersistentFlags())
 	// no need to check err, this only checks if variadic args != 0
@@ -135,6 +139,22 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 	sensorInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(new interface{}) {},
 	})
+
+	k8sClientSet := kubernetes.NewForConfigOrDie(cfg)
+	k8sInformerFactory := informers.NewSharedInformerFactoryWithOptions(k8sClientSet, 1*time.Minute)
+	k8sInformerFactory.Start(wait.NeverStop)
+	k8sInformerFactory.WaitForCacheSync(wait.NeverStop)
+
+	namespacesInformer := k8sInformerFactory.Core().V1().Namespaces()
+	namespacesInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(new interface{}) {},
+	})
+
+	// namespaceRateLimitGetter := namespace.NewNamespaceInfo(
+	// 	namespacesInformer.Lister(),
+	// 	viper.GetString("rate-limit-unit-annotation"),
+	// 	viper.GetString("requests-per-unit-annotation"),
+	// )
 
 	return mgr.Start(ctx)
 }
