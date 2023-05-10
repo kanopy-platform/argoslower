@@ -1,9 +1,0 @@
-.git
-.gitignore
-.licensed.yaml
-.drone.yaml
-skaffold.yaml
-README.md
-Dockerfile
-Makefile
-examples/
