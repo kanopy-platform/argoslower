@@ -13,6 +13,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -133,6 +135,16 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 
 	sensorInformer := sinformerFactory.Argoproj().V1alpha1().Sensors()
 	sensorInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(new interface{}) {},
+	})
+
+	k8sClientSet := kubernetes.NewForConfigOrDie(cfg)
+	k8sInformerFactory := informers.NewSharedInformerFactoryWithOptions(k8sClientSet, 1*time.Minute)
+	k8sInformerFactory.Start(wait.NeverStop)
+	k8sInformerFactory.WaitForCacheSync(wait.NeverStop)
+
+	namespacesInformer := k8sInformerFactory.Core().V1().Namespaces()
+	namespacesInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(new interface{}) {},
 	})
 

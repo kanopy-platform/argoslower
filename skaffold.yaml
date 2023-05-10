@@ -1,0 +1,18 @@
+---
+apiVersion: skaffold/v2beta26
+kind: Config
+build:
+  insecureRegistries:
+    - registry.example.com
+  local:
+    push: true
+  artifacts:
+    - image: registry.example.com/argoslower
+      ko:
+        main: ./cmd/
+deploy:
+  kubeContext: minikube
+  kubectl:
+    defaultNamespace: argo
+    manifests:
+      - examples/k8s/*.yaml

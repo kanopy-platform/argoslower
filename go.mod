@@ -7,10 +7,13 @@ require (
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/viper v1.15.0
+	github.com/stretchr/testify v1.8.1
 	go.uber.org/zap v1.24.0
+	k8s.io/api v0.24.13
 	k8s.io/apimachinery v0.24.13
 	k8s.io/cli-runtime v0.24.13
 	k8s.io/client-go v0.24.13
+	k8s.io/utils v0.0.0-20230209194617-a36077c30491
 	sigs.k8s.io/controller-runtime v0.11.2
 )
 
@@ -54,6 +57,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.0.6 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.14.0 // indirect
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/common v0.37.0 // indirect
@@ -80,12 +84,10 @@ require (
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/api v0.24.13 // indirect
 	k8s.io/apiextensions-apiserver v0.24.13 // indirect
 	k8s.io/component-base v0.24.13 // indirect
 	k8s.io/klog/v2 v2.90.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20230308215209-15aac26d736a // indirect
-	k8s.io/utils v0.0.0-20230209194617-a36077c30491 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/kustomize/api v0.12.1 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.13.9 // indirect
