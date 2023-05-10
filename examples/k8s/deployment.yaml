@@ -1,0 +1,143 @@
+---
+apiVersion: cert-manager.io/v1alpha2
+kind: Issuer
+metadata:
+  name: argoslower-selfsigned
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1alpha2
+kind: Certificate
+metadata:
+  name: argoslower
+spec:
+  secretName: argoslower
+  dnsNames:
+    - argoslower.argo.svc
+    - argoslower.argo.svc.cluster.local
+  issuerRef:
+    name: argoslower-selfsigned
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argoslower
+  labels:
+    app: argoslower
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: argoslower
+  template:
+    metadata:
+      labels:
+        app: argoslower
+    spec:
+      containers:
+        - name: argoslower
+          image: registry.example.com/argoslower:latest
+          args:
+            - "--log-level=debug"
+          imagePullPolicy: Always
+          resources:
+            requests:
+              memory: 20Mi
+            limits:
+              memory: 20Mi
+          volumeMounts:
+            - name: webhook-certs
+              mountPath: /etc/webhook/certs
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          ports:
+            - containerPort: 8081
+              name: metrics
+            - containerPort: 8443
+              name: webhooks
+            - containerPort: 8080
+              name: probes
+      serviceAccountName: argoslower
+      volumes:
+        - name: webhook-certs
+          secret:
+            secretName: argoslower
+
+---   
+apiVersion: v1
+kind: Service
+metadata:
+  name: argoslower
+  labels:
+    app: argoslower
+spec:
+  ports:
+  - port: 80
+    targetPort: 8081
+    name: metrics   
+  - port: 8443
+    targetPort: 8443
+    name: webhooks
+  - port: 8080
+    targetPort: 8080
+    name: probes
+  selector:
+    app: argoslower
+
+---   
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: argoslower
+  labels:
+    app: argoslower
+
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  creationTimestamp: null
+  name: argoslower
+  annotations:
+    cert-manager.io/inject-ca-from: argo/argoslower
+webhooks:
+- clientConfig:
+    caBundle: Cg==
+    service:
+      name: argoslower
+      path: /mutate
+      port: 8443
+      namespace: "argo"
+  sideEffects: None
+  admissionReviewVersions: ["v1", "v1beta1"]
+  failurePolicy: Ignore
+  name: v1beta1.argoslower.kanopy-platform.github.io
+  reinvocationPolicy: IfNeeded
+  namespaceSelector:
+    matchExpressions:
+    - key: kubernetes.io/metadata.name
+      operator: NotIn
+      values:
+      - kube-system
+  rules:
+  - apiGroups:
+    - "argoproj.io"
+    apiVersions:
+    - "*"
+    operations:
+    - UPDATE
+    resources:
+    - sensors
+    scope: "Namespaced"
