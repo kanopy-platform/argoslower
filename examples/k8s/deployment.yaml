@@ -2,7 +2,7 @@
 apiVersion: cert-manager.io/v1alpha2
 kind: Issuer
 metadata:
-  name: argoslower-selfsigned
+  name: selfsigned-argoslower
 spec:
   selfSigned: {}
 ---
@@ -16,7 +16,7 @@ spec:
     - argoslower.argo.svc
     - argoslower.argo.svc.cluster.local
   issuerRef:
-    name: argoslower-selfsigned
+    name: selfsigned-argoslower
 
 ---
 apiVersion: apps/v1
