@@ -54,7 +54,8 @@ func NewRootCommand() *cobra.Command {
 	cmd.PersistentFlags().Int("metrics-listen-port", 8081, "Metrics listen port")
 	cmd.PersistentFlags().String("webhook-certs-dir", "/etc/webhook/certs", "Admission webhook TLS certificate directory")
 	cmd.PersistentFlags().Bool("dry-run", false, "Controller dry-run changes only")
-	cmd.PersistentFlags().Int32("default-rate-limit-per-hour", 3600, "Default trigger rate limit per hour")
+	cmd.PersistentFlags().String("default-rate-limit-unit", "Second", "Default rate limit unit")
+	cmd.PersistentFlags().Int32("default-requests-per-unit", 1, "Default requests per unit")
 	cmd.PersistentFlags().String("rate-limit-unit-annotation", "kanopy-events/rate-limit-unit", "Namespace annotation for rate limit unit")
 	cmd.PersistentFlags().String("requests-per-unit-annotation", "kanopy-events/requests-per-unit", "Namespace annotation for requests per unit")
 
@@ -155,6 +156,11 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 	// 	namespacesInformer.Lister(),
 	// 	viper.GetString("rate-limit-unit-annotation"),
 	// 	viper.GetString("requests-per-unit-annotation"),
+	// )
+
+	// rateLimitCalculator := ratelimit.NewRateLimitCalculatorOrDie(
+	// 	viper.GetString("default-rate-limit-unit"),
+	// 	viper.GetInt32("default-requests-per-unit"),
 	// )
 
 	return mgr.Start(ctx)
