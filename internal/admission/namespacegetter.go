@@ -1,4 +1,4 @@
-package namespace
+package admission
 
 import sensor "github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
 
