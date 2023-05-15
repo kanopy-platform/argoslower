@@ -30,7 +30,7 @@ func NewRateLimitCalculatorOrDie(defaultUnit string, defaultLimitValue int32) *R
 
 // Calculates the RateLimit based on min(sensorValue, maxRateLimit) where
 // maxRateLimit is the namespaceValue if set, otherwise defaultRateLimit.
-func (r *RateLimitCalculator) Calculate(namespaceValue, sensorValue *sensor.RateLimit) (sensor.RateLimit, error) {
+func (r *RateLimitCalculator) Calculate(namespaceValue, sensorValue *sensor.RateLimit) sensor.RateLimit {
 	maxRateLimit := r.defaultRateLimit
 	if namespaceValue != nil {
 		// Namespace value overrides the default
@@ -38,7 +38,7 @@ func (r *RateLimitCalculator) Calculate(namespaceValue, sensorValue *sensor.Rate
 	}
 
 	if sensorValue == nil {
-		return maxRateLimit, nil
+		return maxRateLimit
 	}
 
 	return min(maxRateLimit, *sensorValue)
@@ -55,32 +55,25 @@ func validRateLimitUnit(unit string) bool {
 	}
 }
 
-func min(a, b sensor.RateLimit) (sensor.RateLimit, error) {
-	aRequestsPerSecond, err := calculateRequestsPerSecond(a)
-	if err != nil {
-		return sensor.RateLimit{}, err
-	}
-
-	bRequestsPerSecond, err := calculateRequestsPerSecond(b)
-	if err != nil {
-		return sensor.RateLimit{}, err
-	}
+func min(a, b sensor.RateLimit) sensor.RateLimit {
+	aRequestsPerSecond := calculateRequestsPerSecond(a)
+	bRequestsPerSecond := calculateRequestsPerSecond(b)
 
 	if aRequestsPerSecond < bRequestsPerSecond {
-		return a, nil
+		return a
 	}
-	return b, nil
+	return b
 }
 
-func calculateRequestsPerSecond(input sensor.RateLimit) (float64, error) {
+func calculateRequestsPerSecond(input sensor.RateLimit) float64 {
 	switch input.Unit {
 	case sensor.Second:
-		return float64(input.RequestsPerUnit), nil
+		return float64(input.RequestsPerUnit)
 	case sensor.Minute:
-		return float64(input.RequestsPerUnit) / secondsInMinute, nil
+		return float64(input.RequestsPerUnit) / secondsInMinute
 	case sensor.Hour:
-		return float64(input.RequestsPerUnit) / secondsInHour, nil
+		return float64(input.RequestsPerUnit) / secondsInHour
 	default:
-		return 0.0, fmt.Errorf("invalid RateLimit unit: %s", input.Unit)
+		return float64(input.RequestsPerUnit) // defaults to Second if the input unit is invalid
 	}
 }

@@ -152,16 +152,5 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 		AddFunc: func(new interface{}) {},
 	})
 
-	// namespaceRateLimitGetter := namespace.NewNamespaceInfo(
-	// 	namespacesInformer.Lister(),
-	// 	viper.GetString("rate-limit-unit-annotation"),
-	// 	viper.GetString("requests-per-unit-annotation"),
-	// )
-
-	// rateLimitCalculator := ratelimit.NewRateLimitCalculatorOrDie(
-	// 	viper.GetString("default-rate-limit-unit"),
-	// 	viper.GetInt32("default-requests-per-unit"),
-	// )
-
 	return mgr.Start(ctx)
 }
