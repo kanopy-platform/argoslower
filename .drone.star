@@ -84,6 +84,7 @@ def build(name, arch, tag, publish):
             "tags": [
                 "git-${DRONE_COMMIT_SHA:0:7}-" + arch,
             ],
+            "create_repository": True,
         },
     }
 
