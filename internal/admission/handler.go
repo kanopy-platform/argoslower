@@ -50,11 +50,6 @@ func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.R
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
-	if out == nil {
-		log.Error(fmt.Errorf("failed to decode sensor request: %s", req.Name), "")
-		return admission.Errored(http.StatusBadRequest, fmt.Errorf("Nil sensor request"))
-	}
-
 	defaultRate, err := h.rlg.RateLimit(out.Namespace)
 	if err != nil {
 		log.Error(err, fmt.Sprintf("Cannot determine default ratelimit for namespace: %s", out.Namespace))
