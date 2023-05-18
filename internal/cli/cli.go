@@ -155,13 +155,14 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 
 	k8sClientSet := kubernetes.NewForConfigOrDie(cfg)
 	k8sInformerFactory := informers.NewSharedInformerFactoryWithOptions(k8sClientSet, 1*time.Minute)
-	k8sInformerFactory.Start(wait.NeverStop)
-	k8sInformerFactory.WaitForCacheSync(wait.NeverStop)
 
 	namespacesInformer := k8sInformerFactory.Core().V1().Namespaces()
 	namespacesInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(new interface{}) {},
 	})
+
+	k8sInformerFactory.Start(wait.NeverStop)
+	k8sInformerFactory.WaitForCacheSync(wait.NeverStop)
 
 	rlua := viper.GetString("rate-limit-unit-annotation")
 	rlra := viper.GetString("requests-per-unit-annotation")
