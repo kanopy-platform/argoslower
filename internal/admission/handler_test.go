@@ -69,10 +69,10 @@ func TestSensorMutationHook(t *testing.T) {
 	}
 
 	tests := []struct {
-		description string
-		trigger     sensor.Trigger
-		ns          string
-		expected    float64
+		description         string
+		trigger             sensor.Trigger
+		ns                  string
+		expectedRatePerUnit float64
 	}{
 		{
 			description: "Trigger w/o k8s target",
@@ -125,8 +125,8 @@ func TestSensorMutationHook(t *testing.T) {
 				},
 				RateLimit: testRate,
 			},
-			ns:       "novalue",
-			expected: 1,
+			ns:                  "novalue",
+			expectedRatePerUnit: 1,
 		},
 		{
 			description: "Trigger w/ too big k8s target and rate",
@@ -140,7 +140,7 @@ func TestSensorMutationHook(t *testing.T) {
 					RequestsPerUnit: int32(100),
 				},
 			},
-			expected: 2,
+			expectedRatePerUnit: 2,
 		},
 	}
 
@@ -170,10 +170,10 @@ func TestSensorMutationHook(t *testing.T) {
 		assert.True(t, resp.Allowed, "request should be allowed")
 
 		//test patch bytes
-		assert.True(t, (len(resp.Patches) > 0) == (test.expected > 0), fmt.Sprintf("%s mutation expected", test.description))
+		assert.True(t, (len(resp.Patches) > 0) == (test.expectedRatePerUnit > 0), fmt.Sprintf("%s mutation expected", test.description))
 		for _, patch := range resp.Patches {
 			assert.Equal(t, "/spec/triggers/0/rateLimit/requestsPerUnit", patch.Path)
-			assert.Equal(t, float64(test.expected), patch.Value)
+			assert.Equal(t, float64(test.expectedRatePerUnit), patch.Value)
 		}
 	}
 }
