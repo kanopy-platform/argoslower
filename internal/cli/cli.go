@@ -8,9 +8,13 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/kanopy-platform/argoslower/internal/admission"
+	"github.com/kanopy-platform/argoslower/pkg/namespace"
+	"github.com/kanopy-platform/argoslower/pkg/ratelimit"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/informers"
@@ -23,6 +27,7 @@ import (
 	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
+	sensor "github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
 	sensorclient "github.com/argoproj/argo-events/pkg/client/sensor/clientset/versioned"
 	sinformerv1alpha1 "github.com/argoproj/argo-events/pkg/client/sensor/informers/externalversions"
 
@@ -33,6 +38,10 @@ var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("argoslower")
 )
+
+func setupScheme() {
+	utilruntime.Must(sensor.AddToScheme(scheme))
+}
 
 type RootCommand struct {
 	k8sFlags *genericclioptions.ConfigFlags
@@ -106,6 +115,8 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 
 	ctx := signals.SetupSignalHandler()
 
+	setupScheme()
+
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:                 scheme,
 		Host:                   "0.0.0.0",
@@ -144,13 +155,25 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 
 	k8sClientSet := kubernetes.NewForConfigOrDie(cfg)
 	k8sInformerFactory := informers.NewSharedInformerFactoryWithOptions(k8sClientSet, 1*time.Minute)
-	k8sInformerFactory.Start(wait.NeverStop)
-	k8sInformerFactory.WaitForCacheSync(wait.NeverStop)
 
 	namespacesInformer := k8sInformerFactory.Core().V1().Namespaces()
 	namespacesInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(new interface{}) {},
 	})
+
+	k8sInformerFactory.Start(wait.NeverStop)
+	k8sInformerFactory.WaitForCacheSync(wait.NeverStop)
+
+	rlua := viper.GetString("rate-limit-unit-annotation")
+	rlra := viper.GetString("requests-per-unit-annotation")
+
+	nsInformer := namespace.NewNamespaceInfo(namespacesInformer.Lister(), rlua, rlra)
+
+	drlu := viper.GetString("default-rate-limit-unit")
+	drlr := viper.GetInt32("default-requests-per-unit")
+	rlc := ratelimit.NewRateLimitCalculatorOrDie(drlu, drlr)
+
+	admission.NewHandler(nsInformer, rlc).SetupWithManager(mgr)
 
 	return mgr.Start(ctx)
 }
