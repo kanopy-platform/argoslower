@@ -3,6 +3,10 @@ CMD_NAME := $(shell basename ${GO_MODULE})
 DEFAULT_APP_PORT ?= 8080
 GIT_COMMIT := $(shell git rev-parse HEAD)
 ENVTEST_K8S_VERSION = 1.21.4 # matches latest binary version available
+REGISTRY_NAME ?= registry.example.com
+TLS_VERIFY ?= false
+CONTAINER_RUNTIME ?= podman
+CONTEXT ?= kind-kind
 
 RUN ?= .*
 PKG ?= ./...
@@ -49,6 +53,15 @@ docker:
 .PHONY: docker-run
 docker-run: docker ## Build and run the application in a local docker container
 	@docker run -p ${DEFAULT_APP_PORT}:${DEFAULT_APP_PORT} $(CMD_NAME):latest
+
+
+.PHONY: local
+local:
+	${CONTAINER_RUNTIME} build --build-arg GIT_COMMIT=${GIT_COMMIT} -t ${REGISTRY_NAME}/$(CMD_NAME):latest .
+	${CONTAINER_RUNTIME} push ${REGISTRY_NAME}/$(CMD_NAME):latest --tls-verify=${TLS_VERIFY}
+	kubectl apply --context=${CONTEXT} -n argo -f examples/k8s/
+	kubectl rollout restart deployment --context=${CONTEXT} -n argo argoslower && kubectl rollout status deployment --context=${CONTEXT} -n argo argoslower
+
 
 .PHONY: help
 help:
