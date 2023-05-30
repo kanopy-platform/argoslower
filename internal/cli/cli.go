@@ -118,15 +118,16 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 	setupScheme()
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
-		Scheme:                 scheme,
-		Host:                   "0.0.0.0",
-		Port:                   viper.GetInt("webhook-listen-port"),
-		CertDir:                viper.GetString("webhook-certs-dir"),
-		MetricsBindAddress:     fmt.Sprintf("0.0.0.0:%d", viper.GetInt("metrics-listen-port")),
-		HealthProbeBindAddress: ":8080",
-		LeaderElection:         true,
-		LeaderElectionID:       "argoslower",
-		DryRunClient:           dryRun,
+		Scheme:                     scheme,
+		Host:                       "0.0.0.0",
+		Port:                       viper.GetInt("webhook-listen-port"),
+		CertDir:                    viper.GetString("webhook-certs-dir"),
+		MetricsBindAddress:         fmt.Sprintf("0.0.0.0:%d", viper.GetInt("metrics-listen-port")),
+		HealthProbeBindAddress:     ":8080",
+		LeaderElection:             true,
+		LeaderElectionID:           "argoslower",
+		LeaderElectionResourceLock: "leases",
+		DryRunClient:               dryRun,
 	})
 
 	if err != nil {
