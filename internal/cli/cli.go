@@ -8,7 +8,8 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/kanopy-platform/argoslower/internal/admission"
+	esadd "github.com/kanopy-platform/argoslower/internal/admission/eventsource"
+	sadd "github.com/kanopy-platform/argoslower/internal/admission/sensor"
 	"github.com/kanopy-platform/argoslower/pkg/namespace"
 	"github.com/kanopy-platform/argoslower/pkg/ratelimit"
 	"github.com/spf13/cobra"
@@ -174,7 +175,8 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 	drlr := viper.GetInt32("default-requests-per-unit")
 	rlc := ratelimit.NewRateLimitCalculatorOrDie(drlu, drlr)
 
-	admission.NewHandler(nsInformer, rlc).SetupWithManager(mgr)
+	sadd.NewHandler(nsInformer, rlc).SetupWithManager(mgr)
+	esadd.NewHandler().SetupWithmanager(mgr)
 
 	return mgr.Start(ctx)
 }
