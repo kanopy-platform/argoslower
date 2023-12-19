@@ -12,22 +12,21 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	sensorv1alpha1 "github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
+	"github.com/kanopy-platform/argoslower/pkg/ratelimit"
 )
 
 const defaultAnnotationKey string = "v1alpha1.argoslower.kanopy-platform/known-source"
 
 type Handler struct {
-	annotationKey string
-	decoder       *admission.Decoder
+	rlg     RateLimitGetter
+	drlc    *ratelimit.RateLimitCalculator
+	decoder *admission.Decoder
 }
 
-func NewHandler(key string) *Handler {
-	ak := defaultAnnotationKey
-	if key != nil {
-		ak = key
-	}
+func NewHandler(rlg RateLimitGetter, drlc *ratelimit.RateLimitCalculator) *Handler {
 	return &Handler{
-		annotationKey: ak,
+		rlg:  rlg,
+		drlc: drlc,
 	}
 }
 

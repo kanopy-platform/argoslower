@@ -24,7 +24,7 @@ type Handler struct {
 
 func NewHandler(key string) *Handler {
 	ak := defaultAnnotationKey
-	if key != nil {
+	if key != "" {
 		ak = key
 	}
 	return &Handler{
@@ -55,15 +55,15 @@ func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.R
 	}
 
 	if out.ObjectMeta.Annotations == nil {
-		return admission.PatchResponseFromRaw(req.Object.Raw, bytes)
+		return admission.PatchResponseFromRaw(req.Object.Raw, []byte{})
 	}
 
 	_, ok := out.ObjectMeta.Annotations[h.annotationKey]
 	if !ok {
-		return admission.PatchResponseFromRaw(req.Object.Raw, bytes)
+		return admission.PatchResponseFromRaw(req.Object.Raw, []byte{})
 	}
 
-	out.Template = setIstioLabel(out.Template)
+	out.Spec.Template = setIstioLabel(out.Spec.Template)
 
 	bytes, err := json.Marshal(out)
 	if err != nil {
@@ -75,7 +75,7 @@ func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.R
 }
 
 func setIstioLabel(in *esv1alpha1.Template) *esv1alpha1.Template {
-	out = in.DeepCopy()
+	out := in.DeepCopy()
 	if out == nil {
 		out = &esv1alpha1.Template{}
 	}
