@@ -138,6 +138,8 @@ webhooks:
     - "*"
     operations:
     - UPDATE
+    - CREATE
+    - DELETE
     resources:
     - sensors
     scope: "Namespaced"
@@ -175,6 +177,7 @@ webhooks:
     - "*"
     operations:
     - UPDATE
+    - CREATE
     resources:
-    - eventsource
+    - eventsources
     scope: "Namespaced"
