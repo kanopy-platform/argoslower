@@ -32,6 +32,10 @@ import (
 	sensorclient "github.com/argoproj/argo-events/pkg/client/sensor/clientset/versioned"
 	sinformerv1alpha1 "github.com/argoproj/argo-events/pkg/client/sensor/informers/externalversions"
 
+	eventsource "github.com/argoproj/argo-events/pkg/apis/eventsource/v1alpha1"
+	esclient "github.com/argoproj/argo-events/pkg/client/eventsource/clientset/versioned"
+	esinformerv1alpha1 "github.com/argoproj/argo-events/pkg/client/eventsource/informers/externalversions"
+
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 )
 
@@ -42,6 +46,7 @@ var (
 
 func setupScheme() {
 	utilruntime.Must(sensor.AddToScheme(scheme))
+	utilruntime.Must(eventsource.AddToScheme(scheme))
 }
 
 type RootCommand struct {
@@ -154,6 +159,16 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 	sensorInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(new interface{}) {},
 	})
+
+	esc := esclient.NewForConfigOrDie(cfg)
+	esinformerFactory := esinformerv1alpha1.NewSharedInformerFactoryWithOptions(esc, 1*time.Minute)
+
+	esi := esinformerFactory.Argoproj().V1alpha1().EventSources()
+	esi.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(new interface{}) {}})
+
+	esinformerFactory.Start(wait.NeverStop)
+	esinformerFactory.WaitForCacheSync(wait.NeverStop)
 
 	k8sClientSet := kubernetes.NewForConfigOrDie(cfg)
 	k8sInformerFactory := informers.NewSharedInformerFactoryWithOptions(k8sClientSet, 1*time.Minute)
