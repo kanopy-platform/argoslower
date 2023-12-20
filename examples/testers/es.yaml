@@ -3,7 +3,7 @@ kind: EventSource
 metadata:
   name: demo-day
   namespace: devops
-  labels:
+  annotations:
     v1alpha1.argoslower.kanopy-platform/known-source: "thing"
 spec:
   service:
