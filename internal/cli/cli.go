@@ -176,7 +176,7 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 	rlc := ratelimit.NewRateLimitCalculatorOrDie(drlu, drlr)
 
 	sadd.NewHandler(nsInformer, rlc).SetupWithManager(mgr)
-	esadd.NewHandler("").SetupWithManager(mgr)
+	esadd.NewHandler(nsInformer).SetupWithManager(mgr)
 
 	return mgr.Start(ctx)
 }

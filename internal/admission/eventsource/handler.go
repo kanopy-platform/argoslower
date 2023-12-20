@@ -19,16 +19,20 @@ const defaultAnnotationKey string = "v1alpha1.argoslower.kanopy-platform/known-s
 
 type Handler struct {
 	annotationKey string
+	meshChecker   MeshChecker
 	decoder       *admission.Decoder
 }
 
-func NewHandler(key string) *Handler {
-	ak := defaultAnnotationKey
-	if key != "" {
-		ak = key
-	}
+func NewHandler(mc MeshChecker) *Handler {
 	return &Handler{
-		annotationKey: ak,
+		annotationKey: defaultAnnotationKey,
+		meshChecker:   mc,
+	}
+}
+
+func (h *Handler) SetAnnotationKey(key string) {
+	if key != "" {
+		h.annotationKey = key
 	}
 }
 
@@ -47,27 +51,36 @@ func (h *Handler) InjectDecoder(decoder *admission.Decoder) error {
 func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.Response {
 	log := log.FromContext(ctx)
 
+	log.Info(fmt.Sprintf("Received request: %v", req))
+
 	out := &esv1alpha1.EventSource{}
 
+	log.Info("Looking for annotation")
 	if err := h.decoder.Decode(req, out); err != nil {
 		log.Error(err, fmt.Sprintf("failed to decode eventsource request: %s", req.Name))
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
-	if out.ObjectMeta.Annotations == nil {
-		return admission.PatchResponseFromRaw(req.Object.Raw, []byte{})
+	_, ok := out.Annotations[h.annotationKey]
+	if !ok {
+		log.Info("Annotation not found, ignoring eventsource")
+		return admission.Allowed("No modifications needed")
 	}
 
-	_, ok := out.ObjectMeta.Annotations[h.annotationKey]
-	if !ok {
-		return admission.PatchResponseFromRaw(req.Object.Raw, []byte{})
+	onMesh, err := h.meshChecker.OnMesh(out.Namespace)
+	if err != nil {
+		return admission.Errored(http.StatusInternalServerError, err)
+	}
+
+	if !onMesh {
+		return admission.Denied(fmt.Sprintf("Namespace %s is not opted into the mesh. Please contact your cluster administrator and try again", out.Namespace))
 	}
 
 	out.Spec.Template = setIstioLabel(out.Spec.Template)
 
 	bytes, err := json.Marshal(out)
 	if err != nil {
-		log.Error(err, fmt.Sprintf("failed to marshal gateway: %s", out.Name))
+		log.Error(err, fmt.Sprintf("failed to marshal eventsource: %s/%s", out.Namespace, out.Name))
 		return admission.Errored(http.StatusInternalServerError, err)
 
 	}
@@ -92,4 +105,8 @@ func setIstioLabel(in *esv1alpha1.Template) *esv1alpha1.Template {
 	out.Metadata.Labels["sidecar.istio.io/inject"] = "true"
 
 	return out
+}
+
+type MeshChecker interface {
+	OnMesh(namespace string) (bool, error)
 }
