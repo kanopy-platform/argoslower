@@ -44,7 +44,8 @@ func TestEventSourceHandler(t *testing.T) {
 	assert.NoError(t, err)
 
 	f := false
-	for _, test := range []struct {
+
+	tests := []struct {
 		name     string
 		es       esv1alpha1.EventSource
 		key      string
@@ -106,7 +107,8 @@ func TestEventSourceHandler(t *testing.T) {
 			},
 			nsErr: errors.New("test error"),
 		},
-	} {
+	}
+	for _, test := range tests {
 		if test.key == "" {
 			test.key = eventsource.DefaultAnnotationKey
 		}
