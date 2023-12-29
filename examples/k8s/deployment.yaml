@@ -139,7 +139,6 @@ webhooks:
     operations:
     - UPDATE
     - CREATE
-    - DELETE
     resources:
     - sensors
     scope: "Namespaced"
