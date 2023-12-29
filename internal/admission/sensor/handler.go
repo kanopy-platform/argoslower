@@ -15,8 +15,6 @@ import (
 	"github.com/kanopy-platform/argoslower/pkg/ratelimit"
 )
 
-const defaultAnnotationKey string = "v1alpha1.argoslower.kanopy-platform/known-source"
-
 type Handler struct {
 	rlg     RateLimitGetter
 	drlc    *ratelimit.RateLimitCalculator
@@ -31,7 +29,7 @@ func NewHandler(rlg RateLimitGetter, drlc *ratelimit.RateLimitCalculator) *Handl
 }
 
 func (h *Handler) SetupWithManager(m manager.Manager) {
-	m.GetWebhookServer().Register("/mutate/", &webhook.Admission{Handler: h})
+	m.GetWebhookServer().Register("/mutate", &webhook.Admission{Handler: h})
 }
 
 func (h *Handler) InjectDecoder(decoder *admission.Decoder) error {

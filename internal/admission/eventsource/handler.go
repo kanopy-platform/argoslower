@@ -15,7 +15,7 @@ import (
 	esv1alpha1 "github.com/argoproj/argo-events/pkg/apis/eventsource/v1alpha1"
 )
 
-const defaultAnnotationKey string = "v1alpha1.argoslower.kanopy-platform/known-source"
+const DefaultAnnotationKey string = "v1alpha1.argoslower.kanopy-platform/known-source"
 
 type Handler struct {
 	annotationKey string
@@ -25,7 +25,7 @@ type Handler struct {
 
 func NewHandler(mc MeshChecker) *Handler {
 	return &Handler{
-		annotationKey: defaultAnnotationKey,
+		annotationKey: DefaultAnnotationKey,
 		meshChecker:   mc,
 	}
 }
