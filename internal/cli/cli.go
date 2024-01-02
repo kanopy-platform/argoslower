@@ -8,7 +8,8 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/kanopy-platform/argoslower/internal/admission"
+	esadd "github.com/kanopy-platform/argoslower/internal/admission/eventsource"
+	sadd "github.com/kanopy-platform/argoslower/internal/admission/sensor"
 	"github.com/kanopy-platform/argoslower/pkg/namespace"
 	"github.com/kanopy-platform/argoslower/pkg/ratelimit"
 	"github.com/spf13/cobra"
@@ -28,8 +29,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
 	sensor "github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
-	sensorclient "github.com/argoproj/argo-events/pkg/client/sensor/clientset/versioned"
-	sinformerv1alpha1 "github.com/argoproj/argo-events/pkg/client/sensor/informers/externalversions"
+
+	eventsource "github.com/argoproj/argo-events/pkg/apis/eventsource/v1alpha1"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 )
@@ -41,6 +42,7 @@ var (
 
 func setupScheme() {
 	utilruntime.Must(sensor.AddToScheme(scheme))
+	utilruntime.Must(eventsource.AddToScheme(scheme))
 }
 
 type RootCommand struct {
@@ -144,16 +146,6 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	sclient := sensorclient.NewForConfigOrDie(cfg)
-	sinformerFactory := sinformerv1alpha1.NewSharedInformerFactoryWithOptions(sclient, 1*time.Minute)
-	sinformerFactory.Start(wait.NeverStop)
-	sinformerFactory.WaitForCacheSync(wait.NeverStop)
-
-	sensorInformer := sinformerFactory.Argoproj().V1alpha1().Sensors()
-	sensorInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(new interface{}) {},
-	})
-
 	k8sClientSet := kubernetes.NewForConfigOrDie(cfg)
 	k8sInformerFactory := informers.NewSharedInformerFactoryWithOptions(k8sClientSet, 1*time.Minute)
 
@@ -174,7 +166,8 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 	drlr := viper.GetInt32("default-requests-per-unit")
 	rlc := ratelimit.NewRateLimitCalculatorOrDie(drlu, drlr)
 
-	admission.NewHandler(nsInformer, rlc).SetupWithManager(mgr)
+	sadd.NewHandler(nsInformer, rlc).SetupWithManager(mgr)
+	esadd.NewHandler(nsInformer).SetupWithManager(mgr)
 
 	return mgr.Start(ctx)
 }

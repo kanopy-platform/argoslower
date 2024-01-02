@@ -60,3 +60,19 @@ func (n *NamespaceInfo) RateLimit(namespace string) (*sensor.RateLimit, error) {
 
 	return &result, nil
 }
+
+func (n *NamespaceInfo) OnMesh(namespace string) (bool, error) {
+	if namespace == "" {
+		return false, nil
+	}
+
+	ns, err := n.lister.Get(namespace)
+	if err != nil {
+		return false, err
+	}
+
+	if val, ok := ns.Labels["istio.io/rev"]; !ok || val == "" {
+		return false, nil
+	}
+	return true, nil
+}

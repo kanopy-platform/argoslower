@@ -5,7 +5,7 @@ WORKDIR /go/src/app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN go build -ldflags="-X 'github.com/kanopy-platform/argoslower/internal/version.version=${VERSION}' -X 'github.com/kanopy-platform/argoslower/internal/version.gitCommit=${GIT_COMMIT}'" -o /go/bin/app ./cmd/
+RUN CGO_ENABLED=0 go build -ldflags="-X 'github.com/kanopy-platform/argoslower/internal/version.version=${VERSION}' -X 'github.com/kanopy-platform/argoslower/internal/version.gitCommit=${GIT_COMMIT}'" -o /go/bin/app ./cmd/
 
 FROM debian:buster-slim
 RUN apt-get update && apt-get install --yes ca-certificates
