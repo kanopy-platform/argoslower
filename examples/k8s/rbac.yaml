@@ -12,6 +12,14 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - "argoproj.io"
+  operations:
+  - get
+  - list
+  - watch
+  resources:
+  - eventsources
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

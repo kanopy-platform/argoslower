@@ -31,8 +31,6 @@ import (
 	sensor "github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
 
 	eventsource "github.com/argoproj/argo-events/pkg/apis/eventsource/v1alpha1"
-
-	eventsource "github.com/argoproj/argo-events/pkg/apis/eventsource/v1alpha1"
 	esclient "github.com/argoproj/argo-events/pkg/client/eventsource/clientset/versioned"
 	esinformerv1alpha1 "github.com/argoproj/argo-events/pkg/client/eventsource/informers/externalversions"
 
