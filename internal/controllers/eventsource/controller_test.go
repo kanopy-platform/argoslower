@@ -85,4 +85,17 @@ func TestReconcile(t *testing.T) {
 
 	assert.NoError(t, err)
 
+	es := &esv1alpha1.EventSource{}
+	es.Namespace = "foo"
+	es.Name = "bar"
+	fakeNSL.AppendES(es)
+
+	_, err = controller.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+	assert.NoError(t, err)
+
+	es.Annotations = map[string]string{"v1alpha1.argoslower.kanopy-platform/known-source": "jira"}
+	fakeNSL.AppendES(es)
+
+	_, err = controller.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
+	assert.NoError(t, err)
 }
