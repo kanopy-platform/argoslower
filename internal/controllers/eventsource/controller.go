@@ -20,6 +20,12 @@ type EventSourceIngressController struct {
 	//	config    EventSourceIngressControllerConfig
 }
 
+func NewEventSourceIngressController(esl eslister.EventSourceLister) *EventSourceIngressController {
+	return &EventSourceIngressController{
+		esLister: esl,
+	}
+}
+
 func (e *EventSourceIngressController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
@@ -70,9 +76,10 @@ func (e *EventSourceIngressController) reconcile(ctx context.Context, es *esv1al
 		}
 
 	default:
+		//TODO: Log event for unsupported webhook type
+		return nil
 
 	}
-
 	return nil
 
 }
