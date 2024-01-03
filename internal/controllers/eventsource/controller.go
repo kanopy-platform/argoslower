@@ -9,6 +9,7 @@ import (
 
 	eshandler "github.com/kanopy-platform/argoslower/internal/admission/eventsource"
 	k8serror "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 
 	esv1alpha1 "github.com/argoproj/argo-events/pkg/apis/eventsource/v1alpha1"
 	eslister "github.com/argoproj/argo-events/pkg/client/eventsource/listers/eventsource/v1alpha1"
@@ -23,22 +24,14 @@ func (e *EventSourceIngressController) Reconcile(ctx context.Context, req ctrl.R
 	log := log.FromContext(ctx)
 
 	eventSource, err := e.esLister.EventSources(req.NamespacedName.Namespace).Get(req.NamespacedName.Name)
-	if err != nil {
-		if k8serror.IsNotFound(err) {
-			log.Info("WARNING: eventsource not found", req)
-			return ctrl.Result{}, nil
-		}
+	if err != nil && !k8serror.IsNotFound(err) {
 		log.Error(err, fmt.Sprintf("unable to get eventsource %v", req))
-		return ctrl.Result{}, err
+		return ctrl.Result{
+			Requeue: true,
+		}, err
 	}
 
-	//If the event source isn't annotated it can be ignored
-	if _, ok := eventSource.Annotations[eshandler.DefaultAnnotationKey]; !ok {
-		return ctrl.Result{}, nil
-
-	}
-
-	if err := e.reconcile(ctx, eventSource.DeepCopy()); err != nil {
+	if err = e.reconcile(ctx, eventSource.DeepCopy(), req.NamespacedName); err != nil {
 		return ctrl.Result{
 			Requeue: true,
 		}, err
@@ -48,13 +41,22 @@ func (e *EventSourceIngressController) Reconcile(ctx context.Context, req ctrl.R
 
 }
 
-func (e *EventSourceIngressController) reconcile(ctx context.Context, es *esv1alpha1.EventSource) error {
+func (e *EventSourceIngressController) reconcile(ctx context.Context, es *esv1alpha1.EventSource, nsn types.NamespacedName) error {
 	log := log.FromContext(ctx)
 	if es == nil {
+		//TODO: implement garbage collection we should be able to use the NamespacedName to associated vanity resources to the namespace/eventsource
+		// event source svc labels
+		//   labels:
+		//      controller: eventsource-controller
+		//      eventsource-name: demo-day
+		//      owner-name: demo-day
 		return nil
 	}
 
-	hookType := es.Annotations[eshandler.DefaultAnnotationKey]
+	hookType, ok := es.Annotations[eshandler.DefaultAnnotationKey]
+	if !ok {
+		return nil
+	}
 
 	switch hookType {
 	case "github":
