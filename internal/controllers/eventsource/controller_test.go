@@ -44,7 +44,7 @@ func (f *FakeESNamespaceLister) List(selector labels.Selector) (ret []*esv1alpha
 }
 
 func (f *FakeESNamespaceLister) Get(name string) (*esv1alpha1.EventSource, error) {
-	return nil, nil
+	return f.Next()
 }
 
 func (f *FakeESNamespaceLister) AppendES(es *esv1alpha1.EventSource) {
