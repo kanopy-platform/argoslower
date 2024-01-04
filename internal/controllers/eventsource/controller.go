@@ -11,18 +11,33 @@ import (
 	k8serror "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
+	corev1 "k8s.io/api/core/v1"
+	corev1lister "k8s.io/client-go/listers/core/v1"
+
+	eventscommon "github.com/argoproj/argo-events/common"
 	esv1alpha1 "github.com/argoproj/argo-events/pkg/apis/eventsource/v1alpha1"
 	eslister "github.com/argoproj/argo-events/pkg/client/eventsource/listers/eventsource/v1alpha1"
+
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 type EventSourceIngressController struct {
-	esLister eslister.EventSourceLister
-	//	config    EventSourceIngressControllerConfig
+	esLister      eslister.EventSourceLister
+	serviceLister corev1lister.ServiceLister
+	config        EventSourceIngressControllerConfig
 }
 
-func NewEventSourceIngressController(esl eslister.EventSourceLister) *EventSourceIngressController {
+type EventSourceIngressControllerConfig struct {
+	gateway        types.NamespacedName
+	baseURL        string
+	adminNamespace string
+}
+
+func NewEventSourceIngressController(esl eslister.EventSourceLister, svcl corev1lister.ServiceLister, config EventSourceIngressControllerConfig) *EventSourceIngressController {
 	return &EventSourceIngressController{
-		esLister: esl,
+		esLister:      esl,
+		serviceLister: svcl,
+		config:        config,
 	}
 }
 
@@ -49,6 +64,12 @@ func (e *EventSourceIngressController) Reconcile(ctx context.Context, req ctrl.R
 
 func (e *EventSourceIngressController) reconcile(ctx context.Context, es *esv1alpha1.EventSource, nsn types.NamespacedName) error {
 	log := log.FromContext(ctx)
+
+	esiConfig := EventSourceIngressConfig{
+		es:             nsn,
+		gateway:        e.config.gateway,
+		adminNamespace: e.config.adminNamespace,
+	}
 	if es == nil {
 		//TODO: implement garbage collection we should be able to use the NamespacedName to associated vanity resources to the namespace/eventsource
 		// event source svc labels
@@ -56,24 +77,58 @@ func (e *EventSourceIngressController) reconcile(ctx context.Context, es *esv1al
 		//      controller: eventsource-controller
 		//      eventsource-name: demo-day
 		//      owner-name: demo-day
+		// look up and delete virtual service
+		// look up and delete authorization policy
+		//
+		// look up and delete virtual service delegate
 		return nil
 	}
 
 	hookType, ok := es.Annotations[eshandler.DefaultAnnotationKey]
 	if !ok {
+		//TODO: should this get filtered at admission time for a list of supported values?
+		return nil
+	}
+
+	selector, err := labels.ValidatedSelectorFromSet(
+		labels.Set(map[string]string{
+			eventscommon.LabelEventSourceName: nsn.Name,
+		}),
+	)
+	if err != nil {
+		return err
+	}
+
+	svcl, err := e.serviceLister.Services(nsn.Namespace).List(selector)
+	if err != nil {
+		return err
+	}
+
+	if len(svcl) != 1 {
+		return fmt.Errorf("Cannot Select a service for event source %s/%s. Want 1 received: %d", nsn.Namespace, nsn.Name, len(svcl))
+	}
+
+	svc := svcl[0]
+	if svc == nil {
+		return fmt.Errorf("Expected a Service resource and got: %v", svc)
+	}
+
+	esiConfig.endpoints = ServiceToPortMapping(svc, es)
+	log.Info(fmt.Sprintf("%v", esiConfig.endpoints))
+	fmt.Println(esiConfig.endpoints)
+	if len(esiConfig.endpoints) == 0 {
+		//TODO: we might want to emit an event here for a misconfigured eventsource
+		// the port on the webhook configuration doesn't appear on the service definition
+		// it is excluded because it isn't routable
 		return nil
 	}
 
 	switch hookType {
 	case "github":
-		log.Info("populate ingress config for github")
+		//TODO: set github ip getter
 
 	case "jira":
-		log.Info("populate ingress config for a generic webhook")
-
-		if es.Spec.Webhook != nil {
-			return nil
-		}
+		//TODO: set jira ip getter
 
 	default:
 		//TODO: Log event for unsupported webhook type
@@ -81,20 +136,81 @@ func (e *EventSourceIngressController) reconcile(ctx context.Context, es *esv1al
 
 	}
 	return nil
+}
 
+type NamedPath struct {
+	name string
+	path string
 }
 
 // IngressConfiguratorConfig proto
 // ipcidrs []string sourced from ip listers
 // selectors map[string]string sourced from eventsource
+// gateway name/namespce
 // namespace
 // name
-
-func Reconcile(ctx context.Context, esc EventSourceConfig) error {
-
-	return nil
+type EventSourceIngressConfig struct {
+	ipg            IPGetter
+	es             types.NamespacedName
+	endpoints      map[string]NamedPath
+	adminNamespace string
+	baseURL        string
+	gateway        types.NamespacedName
 }
 
-type EventSourceIngressControllerConfig struct{}
+/*
+func (e *EventSourceIngressConfig) RenderResources(client *v1istio.Client) (*isnetv1beta1.VirtualService, *issecv1beta1.AuthorizationPolicy) {
 
-type EventSourceConfig struct{}
+	// VirtualService
+
+	vs := &isnetv1beta1.VirtualService{}
+	vs.Name = fmt.Sprintf("%s-%s", es.Namespace, es.Name)
+	vs.Namespace = e.adminNamespace
+
+	// AuthorizationPolicy
+
+	ap := &issecv1beta1.AuthorizationPolicy{}
+	ap.Name = fmt.Sprintf("%s-%s", es.Namespace, es.Name)
+	ap.Namespace = e.adminNamespace
+}
+*/
+func ServiceToPortMapping(svc *corev1.Service, es *esv1alpha1.EventSource) (out map[string]NamedPath) {
+	out = map[string]NamedPath{}
+	//Only github and webhook eventsources are supported for self-service webhooks currently.
+	//if neither of those are configured don't offer any ports
+	if svc == nil || es == nil || (es.Spec.Webhook == nil && es.Spec.Github == nil) {
+		return out
+	}
+
+	for _, svcport := range svc.Spec.Ports {
+		out[string(svcport.Port)] = NamedPath{}
+	}
+	for esn, spec := range es.Spec.Webhook {
+		np, ok := out[spec.Port]
+		if !ok {
+			continue
+		}
+		np.name = esn
+		np.path = spec.Endpoint
+		out[spec.Port] = np
+	}
+
+	for esn, spec := range es.Spec.Github {
+		if spec.Webhook == nil {
+			continue
+		}
+		np, ok := out[spec.Webhook.Port]
+		if !ok {
+			continue
+		}
+		np.name = esn
+		np.path = spec.Webhook.Endpoint
+		out[spec.Webhook.Port] = np
+	}
+
+	return out
+}
+
+type IPGetter interface {
+	GetIPs() ([]string, error)
+}
