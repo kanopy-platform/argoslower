@@ -143,12 +143,12 @@ func (e *EventSourceIngressController) reconcile(ctx context.Context, es *esv1al
 // ingress resources mapped to the service of an argo event source.
 // it is ingress provider agnostic.
 type EventSourceIngressConfig struct {
-	ipg            IPGetter
+	//	ipg            IPGetter
 	es             types.NamespacedName
 	endpoints      map[string]ingresscommon.NamedPath
 	adminNamespace string
-	baseURL        string
-	gateway        types.NamespacedName
+	//	baseURL        string
+	gateway types.NamespacedName
 }
 
 // ServiceToPortMapping - receives a Service and argo EventSource and returns a validated port lookup map of
