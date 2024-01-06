@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	ingresscommon "github.com/kanopy-platform/argoslower/pkg/ingress"
+
 	esv1alpha1 "github.com/argoproj/argo-events/pkg/apis/eventsource/v1alpha1"
 	eslister "github.com/argoproj/argo-events/pkg/client/eventsource/listers/eventsource/v1alpha1"
 	"github.com/stretchr/testify/assert"
@@ -196,13 +198,13 @@ func TestServiceToPortMapping(t *testing.T) {
 		name     string
 		svc      *corev1.Service
 		es       *esv1alpha1.EventSource
-		expected map[string]NamedPath
+		expected map[string]ingresscommon.NamedPath
 	}{
 		{
 			name:     "empty",
 			svc:      &corev1.Service{},
 			es:       &esv1alpha1.EventSource{},
-			expected: map[string]NamedPath{},
+			expected: map[string]ingresscommon.NamedPath{},
 		},
 		{
 			name: "webhook",
@@ -227,10 +229,83 @@ func TestServiceToPortMapping(t *testing.T) {
 					},
 				},
 			},
-			expected: map[string]NamedPath{
-				"12345": NamedPath{
-					name: "thing",
-					path: "/path",
+			expected: map[string]ingresscommon.NamedPath{
+				"12345": ingresscommon.NamedPath{
+					Name: "thing",
+					Path: "/path",
+				},
+			},
+		},
+		{
+			name: "multiple webhooks",
+			svc: &corev1.Service{
+				Spec: corev1.ServiceSpec{
+					Ports: []corev1.ServicePort{
+						corev1.ServicePort{
+							Port: int32(12345),
+						},
+						corev1.ServicePort{
+							Port: int32(54321),
+						},
+					},
+				},
+			},
+			es: &esv1alpha1.EventSource{
+				Spec: esv1alpha1.EventSourceSpec{
+					Webhook: map[string]esv1alpha1.WebhookEventSource{
+						"thingOne": esv1alpha1.WebhookEventSource{
+							WebhookContext: esv1alpha1.WebhookContext{
+								Endpoint: "/path",
+								Port:     "12345",
+							},
+						},
+						"thingTwo": esv1alpha1.WebhookEventSource{
+							WebhookContext: esv1alpha1.WebhookContext{
+								Endpoint: "/path",
+								Port:     "54321",
+							},
+						},
+					},
+				},
+			},
+			expected: map[string]ingresscommon.NamedPath{
+				"12345": ingresscommon.NamedPath{
+					Name: "thingOne",
+					Path: "/path",
+				},
+				"54321": ingresscommon.NamedPath{
+					Name: "thingTwo",
+					Path: "/path",
+				},
+			},
+		},
+		{
+			name: "github",
+			svc: &corev1.Service{
+				Spec: corev1.ServiceSpec{
+					Ports: []corev1.ServicePort{
+						corev1.ServicePort{
+							Port: int32(12345),
+						},
+					},
+				},
+			},
+			es: &esv1alpha1.EventSource{
+				Spec: esv1alpha1.EventSourceSpec{
+					Github: map[string]esv1alpha1.GithubEventSource{
+						"github": esv1alpha1.GithubEventSource{
+							Webhook: &esv1alpha1.WebhookContext{
+								Endpoint: "/path",
+								Port:     "12345",
+							},
+						},
+					},
+				},
+			},
+			expected: map[string]ingresscommon.NamedPath{
+				"12345": ingresscommon.NamedPath{
+					Name: "github",
+					Path: "/path",
 				},
 			},
 		},
@@ -242,8 +317,8 @@ func TestServiceToPortMapping(t *testing.T) {
 		for k, v := range test.expected {
 			val, ok := out[k]
 			assert.True(t, ok, test.name)
-			assert.Equal(t, v.name, val.name, test.name)
-			assert.Equal(t, v.path, val.path, test.name)
+			assert.Equal(t, v.Name, val.Name, test.name)
+			assert.Equal(t, v.Path, val.Path, test.name)
 		}
 
 	}

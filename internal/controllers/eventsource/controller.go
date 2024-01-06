@@ -8,6 +8,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	eshandler "github.com/kanopy-platform/argoslower/internal/admission/eventsource"
+	ingresscommon "github.com/kanopy-platform/argoslower/pkg/ingress"
 	k8serror "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -64,6 +65,7 @@ func (e *EventSourceIngressController) Reconcile(ctx context.Context, req ctrl.R
 
 func (e *EventSourceIngressController) reconcile(ctx context.Context, es *esv1alpha1.EventSource, nsn types.NamespacedName) error {
 	log := log.FromContext(ctx)
+	log.V(5).Info("Starting reconciliation for %s/%s", nsn.Namespace, nsn.Name)
 
 	esiConfig := EventSourceIngressConfig{
 		es:             nsn,
@@ -114,8 +116,6 @@ func (e *EventSourceIngressController) reconcile(ctx context.Context, es *esv1al
 	}
 
 	esiConfig.endpoints = ServiceToPortMapping(svc, es)
-	log.Info(fmt.Sprintf("%v", esiConfig.endpoints))
-	fmt.Println(esiConfig.endpoints)
 	if len(esiConfig.endpoints) == 0 {
 		//TODO: we might want to emit an event here for a misconfigured eventsource
 		// the port on the webhook configuration doesn't appear on the service definition
@@ -138,11 +138,6 @@ func (e *EventSourceIngressController) reconcile(ctx context.Context, es *esv1al
 	return nil
 }
 
-type NamedPath struct {
-	name string
-	path string
-}
-
 // IngressConfiguratorConfig proto
 // ipcidrs []string sourced from ip listers
 // selectors map[string]string sourced from eventsource
@@ -152,7 +147,7 @@ type NamedPath struct {
 type EventSourceIngressConfig struct {
 	ipg            IPGetter
 	es             types.NamespacedName
-	endpoints      map[string]NamedPath
+	endpoints      map[string]ingresscommon.NamedPath
 	adminNamespace string
 	baseURL        string
 	gateway        types.NamespacedName
@@ -174,24 +169,24 @@ func (e *EventSourceIngressConfig) RenderResources(client *v1istio.Client) (*isn
 	ap.Namespace = e.adminNamespace
 }
 */
-func ServiceToPortMapping(svc *corev1.Service, es *esv1alpha1.EventSource) (out map[string]NamedPath) {
-	out = map[string]NamedPath{}
+func ServiceToPortMapping(svc *corev1.Service, es *esv1alpha1.EventSource) (out map[string]ingresscommon.NamedPath) {
+	out = map[string]ingresscommon.NamedPath{}
 	//Only github and webhook eventsources are supported for self-service webhooks currently.
 	//if neither of those are configured don't offer any ports
-	if svc == nil || es == nil || (es.Spec.Webhook == nil && es.Spec.Github == nil) {
+	if svc == nil || es == nil {
 		return out
 	}
 
 	for _, svcport := range svc.Spec.Ports {
-		out[string(svcport.Port)] = NamedPath{}
+		out[fmt.Sprintf("%d", svcport.Port)] = ingresscommon.NamedPath{}
 	}
 	for esn, spec := range es.Spec.Webhook {
 		np, ok := out[spec.Port]
 		if !ok {
 			continue
 		}
-		np.name = esn
-		np.path = spec.Endpoint
+		np.Name = esn
+		np.Path = spec.Endpoint
 		out[spec.Port] = np
 	}
 
@@ -203,8 +198,8 @@ func ServiceToPortMapping(svc *corev1.Service, es *esv1alpha1.EventSource) (out 
 		if !ok {
 			continue
 		}
-		np.name = esn
-		np.path = spec.Webhook.Endpoint
+		np.Name = esn
+		np.Path = spec.Webhook.Endpoint
 		out[spec.Webhook.Port] = np
 	}
 
