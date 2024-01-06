@@ -1,6 +1,6 @@
 module github.com/kanopy-platform/argoslower
 
-go 1.20
+go 1.21
 
 replace (
 	k8s.io/api v0.26.0 => k8s.io/api v0.25.16
