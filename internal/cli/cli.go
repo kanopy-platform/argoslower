@@ -14,6 +14,7 @@ import (
 	"github.com/kanopy-platform/argoslower/pkg/ratelimit"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -23,6 +24,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	klog "sigs.k8s.io/controller-runtime/pkg/log"
 	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -30,9 +32,13 @@ import (
 
 	sensor "github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
 
+	eventscommon "github.com/argoproj/argo-events/common"
 	eventsource "github.com/argoproj/argo-events/pkg/apis/eventsource/v1alpha1"
 	esclient "github.com/argoproj/argo-events/pkg/client/eventsource/clientset/versioned"
 	esinformerv1alpha1 "github.com/argoproj/argo-events/pkg/client/eventsource/informers/externalversions"
+
+	istioclient "istio.io/client-go/pkg/clientset/versioned"
+	istioinformer "istio.io/client-go/pkg/informers/externalversions"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 )
@@ -177,6 +183,46 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 	drlu := viper.GetString("default-rate-limit-unit")
 	drlr := viper.GetInt32("default-requests-per-unit")
 	rlc := ratelimit.NewRateLimitCalculatorOrDie(drlu, drlr)
+
+	//creater a filtered informer for resources with the event-source labal
+	selector := eventscommon.LabelEventSourceName
+	_, err = labels.Parse(selector)
+	if err != nil {
+		return err
+	}
+
+	labelOptions := informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
+		opts.LabelSelector = selector
+	})
+
+	filteredk8sInformerFactory := informers.NewSharedInformerFactoryWithOptions(k8sClientSet, 1*time.Minute, labelOptions)
+
+	filteredServiceInfomer := filteredk8sInformerFactory.Core().V1().Services()
+	filteredServiceInfomer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(new interface{}) {},
+	})
+
+	filteredk8sInformerFactory.Start(wait.NeverStop)
+	filteredk8sInformerFactory.WaitForCacheSync(wait.NeverStop)
+
+	istioCS := istioclient.NewForConfigOrDie(cfg)
+	istioOptions := istioinformer.WithTweakListOptions(func(opts *metav1.ListOptions) {
+		opts.LabelSelector = selector
+	})
+	filteredIstioInformerFactory := istioinformer.NewSharedInformerFactoryWithOptions(istioCS, 1*time.Minute, istioOptions)
+
+	filteredVirtualServiceInfomer := filteredIstioInformerFactory.Networking().V1beta1().VirtualServices().Informer()
+	filteredVirtualServiceInfomer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(new interface{}) {},
+	})
+
+	filteredAuthorizationPolicyInformer := filteredIstioInformerFactory.Security().V1beta1().AuthorizationPolicies().Informer()
+	filteredAuthorizationPolicyInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(new interface{}) {},
+	})
+
+	filteredIstioInformerFactory.Start(wait.NeverStop)
+	filteredIstioInformerFactory.WaitForCacheSync(wait.NeverStop)
 
 	sadd.NewHandler(nsInformer, rlc).SetupWithManager(mgr)
 	esadd.NewHandler(nsInformer).SetupWithManager(mgr)

@@ -3,7 +3,10 @@ module github.com/kanopy-platform/argoslower
 go 1.20
 
 replace (
+	k8s.io/api v0.26.0 => k8s.io/api v0.25.16
 	k8s.io/apiextensions-apiserver v0.24.13 => k8s.io/apiextensions-apiserver v0.25.16
+	k8s.io/apimachinery v0.26.0 => k8s.io/apimachinery v0.25.16
+	k8s.io/client-go v0.26.0 => k8s.io/client-go v0.25.16
 	k8s.io/component-base v0.24.13 => k8s.io/component-base v0.25.16
 	k8s.io/kube-openapi v0.0.0-20220627174259-011e075b9cb8 => k8s.io/kube-openapi v0.0.0-20220114203427-a0453230fd26
 )
@@ -15,10 +18,11 @@ require (
 	github.com/spf13/viper v1.15.0
 	github.com/stretchr/testify v1.8.2
 	go.uber.org/zap v1.24.0
-	k8s.io/api v0.25.16
-	k8s.io/apimachinery v0.25.16
+	istio.io/client-go v1.16.6
+	k8s.io/api v0.26.0
+	k8s.io/apimachinery v0.26.0
 	k8s.io/cli-runtime v0.25.16
-	k8s.io/client-go v0.25.16
+	k8s.io/client-go v0.26.0
 	sigs.k8s.io/controller-runtime v0.11.2
 )
 
