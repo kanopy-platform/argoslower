@@ -1,9 +1,12 @@
 module github.com/kanopy-platform/argoslower
 
-go 1.20
+go 1.21
 
 replace (
+	k8s.io/api v0.26.0 => k8s.io/api v0.25.16
 	k8s.io/apiextensions-apiserver v0.24.13 => k8s.io/apiextensions-apiserver v0.25.16
+	k8s.io/apimachinery v0.26.0 => k8s.io/apimachinery v0.25.16
+	k8s.io/client-go v0.26.0 => k8s.io/client-go v0.25.16
 	k8s.io/component-base v0.24.13 => k8s.io/component-base v0.25.16
 	k8s.io/kube-openapi v0.0.0-20220627174259-011e075b9cb8 => k8s.io/kube-openapi v0.0.0-20220114203427-a0453230fd26
 )
@@ -15,10 +18,12 @@ require (
 	github.com/spf13/viper v1.15.0
 	github.com/stretchr/testify v1.8.2
 	go.uber.org/zap v1.24.0
-	k8s.io/api v0.25.16
-	k8s.io/apimachinery v0.25.16
+	istio.io/api v0.0.0-20230711220847-08f4f4a00d6e
+	istio.io/client-go v1.16.6
+	k8s.io/api v0.26.0
+	k8s.io/apimachinery v0.26.0
 	k8s.io/cli-runtime v0.25.16
-	k8s.io/client-go v0.25.16
+	k8s.io/client-go v0.26.0
 	sigs.k8s.io/controller-runtime v0.11.2
 )
 
@@ -84,6 +89,7 @@ require (
 	golang.org/x/time v0.3.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
+	google.golang.org/genproto v0.0.0-20221227171554-f9683d7f8bef // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
@@ -92,7 +98,7 @@ require (
 	k8s.io/apiextensions-apiserver v0.24.13 // indirect
 	k8s.io/component-base v0.25.16 // indirect
 	k8s.io/klog/v2 v2.100.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20220803162953-67bda5d908f1 // indirect
+	k8s.io/kube-openapi v0.0.0-20221012153701-172d655c2280 // indirect
 	k8s.io/utils v0.0.0-20230406110748-d93618cff8a2 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/kustomize/api v0.12.1 // indirect

@@ -108,7 +108,7 @@ def build(name, arch, tag, publish):
 def test_step():
     return {
         "name": "test",
-        "image": "golangci/golangci-lint:v1.52",
+        "image": "golangci/golangci-lint:v1.55.2",
         "pull": "always",
         "commands": ["make test"],
     }
