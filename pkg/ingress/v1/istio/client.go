@@ -87,7 +87,7 @@ func (ic *IstioConfig) IsConfigured() bool {
 }
 
 // ConfigureVS populates the IstioConfig.vs field with a VirtualService associated with the IC.
-// The VS is assocaitged with the gateway assigned to the IstioConfig and maps paths onto the
+// The VS is associated with the gateway assigned to the IstioConfig and maps paths onto the
 // base url in the format baseURL/es.Namespace/es.Name/endpoint/ as a prefix match.
 // The virtual service targets the fully qualified internal service host name on the port assigned
 // to the endpoint in the port mapping.
@@ -158,7 +158,7 @@ func (ic *IstioConfig) ConfigureVS(svc, es types.NamespacedName, endpoints map[s
 // ConfigureAP configures the IstioConfig.ap field with an AuthorizationPolicy base on the inputs.
 // The AP will contain a single rule that contains the full IP CIDR list and all paths from the
 // endpoint mapping with a glob match. The AP will match the baseURL and baseURL:* hostnames
-// per istio hoat match best practice.
+// per istio host match best practice.
 func (ic *IstioConfig) ConfigureAP(nsn types.NamespacedName, inCIDRs []string, endpoints map[string]common.NamedPath) {
 
 	cirds := make([]string, len(inCIDRs))
