@@ -66,13 +66,13 @@ func NewIstioConfig(gw types.NamespacedName, gws map[string]string, baseURL stri
 // GetVirtualService returns the current configured or unconfigured virtual service
 // if the virtual service is unconfigured it is nil.
 func (ic *IstioConfig) GetVirtualService() *isnetv1beta1.VirtualService {
-	return ic.vs
+	return ic.vs.DeepCopy()
 }
 
 // GetAuthorizationPolicy returns the current configured or unconfigured authorization
 // policy if the authorization policy is unconfigured it is nil.
 func (ic *IstioConfig) GetAuthorizationPolicy() *issecv1beta1.AuthorizationPolicy {
-	return ic.ap
+	return ic.ap.DeepCopy()
 }
 
 // IsConfigured returns true if both the ap and vs fields of an IstioConfig
