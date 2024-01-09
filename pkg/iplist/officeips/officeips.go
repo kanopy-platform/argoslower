@@ -13,8 +13,10 @@ const (
 )
 
 type OfficeIPs struct {
-	url     string
-	timeout time.Duration
+	url      string
+	timeout  time.Duration
+	username string
+	password string
 }
 
 // Types for marshalling in response JSON
@@ -28,10 +30,12 @@ type (
 	}
 )
 
-func New(opts ...officeIPsOption) *OfficeIPs {
+func New(user, pass string, opts ...officeIPsOption) *OfficeIPs {
 	o := &OfficeIPs{
-		url:     officeIPsURL,
-		timeout: iplist.DefaultTimeout,
+		url:      officeIPsURL,
+		timeout:  iplist.DefaultTimeout,
+		username: user,
+		password: pass,
 	}
 
 	for _, opt := range opts {
@@ -51,7 +55,7 @@ func (o *OfficeIPs) GetIPs() ([]string, error) {
 		return nil, err
 	}
 
-	req.SetBasicAuth("mongodb", "mongodb")
+	req.SetBasicAuth(o.username, o.password)
 
 	resp, err := client.Do(req)
 	if err != nil {

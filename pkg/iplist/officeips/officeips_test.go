@@ -1,6 +1,9 @@
 package officeips
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -12,7 +15,7 @@ func TestWithURL(t *testing.T) {
 
 	testUrl := "test.example.com"
 
-	g := New(WithURL(testUrl))
+	g := New("user", "pass", WithURL(testUrl))
 	assert.Equal(t, testUrl, g.url)
 }
 
@@ -21,16 +24,35 @@ func TestWithTimeout(t *testing.T) {
 
 	testTimeout := time.Hour * 123
 
-	g := New(WithTimeout(testTimeout))
+	g := New("user", "pass", WithTimeout(testTimeout))
 	assert.Equal(t, testTimeout, g.timeout)
 }
 
 func TestGetIPs(t *testing.T) {
 	t.Parallel()
 
-	g := New()
+	fakeResponse := officeIPsResponse{
+		OfficeIPs: []officeIP{
+			{
+				CIDR: "1.2.3.4/32",
+			},
+			{
+				CIDR: "123.4.5.6/11",
+			},
+		},
+	}
+
+	fakeData, err := json.Marshal(&fakeResponse)
+	assert.NoError(t, err)
+
+	testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		_, err := res.Write(fakeData)
+		assert.NoError(t, err)
+	}))
+
+	g := New("user", "pass", WithURL(testServer.URL))
 	res, err := g.GetIPs()
 
 	assert.NoError(t, err)
-	assert.NotEmpty(t, res)
+	assert.Len(t, res, len(fakeResponse.OfficeIPs))
 }
