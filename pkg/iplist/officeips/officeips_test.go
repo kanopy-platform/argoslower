@@ -15,7 +15,7 @@ func TestWithURL(t *testing.T) {
 
 	testUrl := "test.example.com"
 
-	g := New("user", "pass", WithURL(testUrl))
+	g := New("example.com", "user", "pass", WithURL(testUrl))
 	assert.Equal(t, testUrl, g.url)
 }
 
@@ -24,7 +24,7 @@ func TestWithTimeout(t *testing.T) {
 
 	testTimeout := time.Hour * 123
 
-	g := New("user", "pass", WithTimeout(testTimeout))
+	g := New("example.com", "user", "pass", WithTimeout(testTimeout))
 	assert.Equal(t, testTimeout, g.timeout)
 }
 
@@ -50,7 +50,7 @@ func TestGetIPs(t *testing.T) {
 		assert.NoError(t, err)
 	}))
 
-	g := New("user", "pass", WithURL(testServer.URL))
+	g := New("example.com", "user", "pass", WithURL(testServer.URL))
 	res, err := g.GetIPs()
 
 	assert.NoError(t, err)

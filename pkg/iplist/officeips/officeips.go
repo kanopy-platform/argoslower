@@ -8,10 +8,6 @@ import (
 	"github.com/kanopy-platform/argoslower/pkg/iplist"
 )
 
-const (
-	officeIPsURL = "https://officeips.corp.mongodb.com/public/"
-)
-
 type OfficeIPs struct {
 	url      string
 	timeout  time.Duration
@@ -30,7 +26,7 @@ type (
 	}
 )
 
-func New(user, pass string, opts ...officeIPsOption) *OfficeIPs {
+func New(officeIPsURL, user, pass string, opts ...officeIPsOption) *OfficeIPs {
 	o := &OfficeIPs{
 		url:      officeIPsURL,
 		timeout:  iplist.DefaultTimeout,
