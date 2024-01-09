@@ -17,7 +17,7 @@ func main() {
 
 	fmt.Printf("Github IPs: %v\n", ips)
 
-	officips := officeips.New(os.Getenv("user"), os.Getenv("pass"))
+	officips := officeips.New(os.Getenv("url"), os.Getenv("user"), os.Getenv("pass"))
 	ips, err = officips.GetIPs()
 	if err != nil {
 		panic(err)
