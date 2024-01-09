@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/kanopy-platform/argoslower/pkg/iplist/github"
 	"github.com/kanopy-platform/argoslower/pkg/iplist/officeips"
@@ -16,7 +17,7 @@ func main() {
 
 	fmt.Printf("Github IPs: %v\n", ips)
 
-	officips := officeips.New()
+	officips := officeips.New(os.Getenv("user"), os.Getenv("pass"))
 	ips, err = officips.GetIPs()
 	if err != nil {
 		panic(err)
