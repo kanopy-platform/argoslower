@@ -13,12 +13,14 @@ import (
 func main() {
 	githubReader := http.New("https://api.github.com/meta")
 	githubDecoder := github.New()
+
 	githubIpLister := iplister.New(githubReader, githubDecoder)
 	ips, err := githubIpLister.GetIPs()
-	fmt.Printf("Github IPs: %v\n", ips)
 	if err != nil {
 		panic(err)
 	}
+
+	fmt.Printf("Github IPs: %v\n", ips)
 
 	officeipReader := http.New(os.Getenv("url"), http.WithBasicAuth(os.Getenv("user"), os.Getenv("pass")))
 	officeipDecoder := officeips.New()
