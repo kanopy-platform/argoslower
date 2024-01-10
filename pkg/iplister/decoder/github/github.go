@@ -5,14 +5,14 @@ import (
 	"io"
 )
 
+// Structs for marshalling in data from https://api.github.com/meta
 type (
-	// Struct for marshalling in data from https://api.github.com/meta
 	githubMetaAPI struct {
 		Hooks []string `json:"hooks"`
 	}
-
-	Github struct{}
 )
+
+type Github struct{}
 
 func New() *Github {
 	return &Github{}
