@@ -1,6 +1,7 @@
 package iplist
 
 import (
+	"errors"
 	"net"
 	"time"
 )
@@ -10,12 +11,14 @@ const (
 )
 
 func ValidateCIDRs(list []string) error {
+	errs := []error{}
+
 	for _, cidr := range list {
 		_, _, err := net.ParseCIDR(cidr)
 		if err != nil {
-			return err
+			errs = append(errs, err)
 		}
 	}
 
-	return nil
+	return errors.Join(errs...)
 }

@@ -33,6 +33,6 @@ func TestValidateCIDRs(t *testing.T) {
 
 	for _, test := range tests {
 		err := ValidateCIDRs(test.input)
-		assert.Equal(t, test.wantErr, err != nil)
+		assert.Equal(t, test.wantErr, err != nil, test.name)
 	}
 }
