@@ -18,6 +18,7 @@ require (
 	github.com/spf13/viper v1.15.0
 	github.com/stretchr/testify v1.8.2
 	go.uber.org/zap v1.24.0
+	gopkg.in/yaml.v3 v3.0.1
 	istio.io/api v0.0.0-20230711220847-08f4f4a00d6e
 	istio.io/client-go v1.16.6
 	k8s.io/api v0.26.0
@@ -94,7 +95,6 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiextensions-apiserver v0.24.13 // indirect
 	k8s.io/component-base v0.25.16 // indirect
 	k8s.io/klog/v2 v2.100.1 // indirect
