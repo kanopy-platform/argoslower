@@ -1,33 +1,24 @@
 package file
 
 import (
-	"bytes"
-	"io"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func newMockReadCloser(b []byte) io.ReadCloser {
-	reader := bytes.NewReader(b)
-	return io.NopCloser(reader)
-}
+const (
+	testFilename = "../../test_data/iplist.yaml"
+)
 
 func TestDecode(t *testing.T) {
 	t.Parallel()
 
-	testContent := `
-iplists:
-  jira:
-    - "1.2.3.4/32"
-    - "5.6.7.8/28"
-  other:
-    - "101.102.103.104/32"
-    - "101.102.103.104/28"
-`
+	testFile, err := os.Open(testFilename)
+	assert.NoError(t, err)
 
 	f := New("jira")
-	res, err := f.Decode(newMockReadCloser([]byte(testContent)))
+	res, err := f.Decode(testFile)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"1.2.3.4/32", "5.6.7.8/28"}, res)
 }
