@@ -9,6 +9,16 @@ import (
 )
 
 func main() {
+	file := iplister.New(
+		file.New("iplists.yaml"),
+		filedeocder.New("jira"),
+	)
+	ips, err := file.GetIPs()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Jira IPs: %v\n", ips)
+
 	// githubIpLister := iplister.New(
 	// 	http.New("https://api.github.com/meta"),
 	// 	github.New(),
@@ -28,14 +38,4 @@ func main() {
 	// 	panic(err)
 	// }
 	// fmt.Printf("Office IPs: %v\n", ips)
-
-	file := iplister.New(
-		file.New("iplists.yaml"),
-		filedeocder.New("jira"),
-	)
-	ips, err := file.GetIPs()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("Jira IPs: %v\n", ips)
 }
