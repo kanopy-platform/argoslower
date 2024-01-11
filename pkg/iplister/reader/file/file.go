@@ -17,10 +17,5 @@ func New(filename string) *File {
 }
 
 func (f *File) Data(ctx context.Context) (io.ReadCloser, error) {
-	file, err := os.Open(f.filename)
-	if err != nil {
-		return nil, err
-	}
-
-	return file, nil
+	return os.Open(f.filename)
 }
