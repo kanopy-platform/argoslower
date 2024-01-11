@@ -4,14 +4,14 @@ import (
 	"fmt"
 
 	"github.com/kanopy-platform/argoslower/pkg/iplister"
-	filedeocder "github.com/kanopy-platform/argoslower/pkg/iplister/decoder/file"
+	filedecoder "github.com/kanopy-platform/argoslower/pkg/iplister/decoder/file"
 	"github.com/kanopy-platform/argoslower/pkg/iplister/reader/file"
 )
 
 func main() {
 	file := iplister.New(
 		file.New("iplists.yaml"),
-		filedeocder.New("jira"),
+		filedecoder.New("jira"),
 	)
 	ips, err := file.GetIPs()
 	if err != nil {
