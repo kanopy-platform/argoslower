@@ -38,7 +38,7 @@ type EventSourceIngressControllerConfig struct {
 	ipGetters      map[string]IPGetter
 }
 
-func NewEventSourceIngresControllerConfig() EventSourceIngressControllerConfig {
+func NewEventSourceIngressControllerConfig() EventSourceIngressControllerConfig {
 	return EventSourceIngressControllerConfig{
 		ipGetters: map[string]IPGetter{},
 	}

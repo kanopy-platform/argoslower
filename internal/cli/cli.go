@@ -10,12 +10,15 @@ import (
 
 	esadd "github.com/kanopy-platform/argoslower/internal/admission/eventsource"
 	sadd "github.com/kanopy-platform/argoslower/internal/admission/sensor"
+	esctrl "github.com/kanopy-platform/argoslower/internal/controllers/eventsource"
+	ic "github.com/kanopy-platform/argoslower/pkg/ingress/v1/istio"
 	"github.com/kanopy-platform/argoslower/pkg/namespace"
 	"github.com/kanopy-platform/argoslower/pkg/ratelimit"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -25,10 +28,13 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	klog "sigs.k8s.io/controller-runtime/pkg/log"
 	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	sensor "github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
 
@@ -77,6 +83,11 @@ func NewRootCommand() *cobra.Command {
 	cmd.PersistentFlags().Int32("default-requests-per-unit", 1, "Default requests per unit")
 	cmd.PersistentFlags().String("rate-limit-unit-annotation", "kanopy-events/rate-limit-unit", "Namespace annotation for rate limit unit")
 	cmd.PersistentFlags().String("requests-per-unit-annotation", "kanopy-events/requests-per-unit", "Namespace annotation for requests per unit")
+	cmd.PersistentFlags().String("webhook-url", "webhooks.example.com", "Base url assocated with webhooks")
+	cmd.PersistentFlags().String("admin-namespace", "routing", "Ingress controller admin namespace")
+	cmd.PersistentFlags().String("gateway-namespace", "routing-rules", "Namespace of the ingress gateway")
+	cmd.PersistentFlags().String("gateway-name", "argo-webhook-gateway", "Name of the ingress gateway")
+	cmd.PersistentFlags().String("gateway-selector", "istio=ingress-gateway-public", "Label selector for the ingress gateway as a key=value comma delimited string")
 
 	k8sFlags.AddFlags(cmd.PersistentFlags())
 	// no need to check err, this only checks if variadic args != 0
@@ -158,11 +169,6 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 	esinformerFactory := esinformerv1alpha1.NewSharedInformerFactoryWithOptions(esc, 1*time.Minute)
 
 	esi := esinformerFactory.Argoproj().V1alpha1().EventSources()
-	esi.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(new interface{}) {}})
-
-	esinformerFactory.Start(wait.NeverStop)
-	esinformerFactory.WaitForCacheSync(wait.NeverStop)
 
 	k8sClientSet := kubernetes.NewForConfigOrDie(cfg)
 	k8sInformerFactory := informers.NewSharedInformerFactoryWithOptions(k8sClientSet, 1*time.Minute)
@@ -227,5 +233,51 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 	sadd.NewHandler(nsInformer, rlc).SetupWithManager(mgr)
 	esadd.NewHandler(nsInformer).SetupWithManager(mgr)
 
+	gws := stringToMap(viper.GetString("gateway-selector"), ",", "=")
+	if len(gws) == 0 {
+		return fmt.Errorf("Invalid gateway-selector: %s", viper.GetString("gateway-selector"))
+	}
+
+	ingressClient := ic.NewClient(istioCS, gws)
+	escc := esctrl.NewEventSourceIngressControllerConfig()
+	escc.Gateway = types.NamespacedName{
+		Namespace: viper.GetString("gateway-namespace"),
+		Name:      viper.GetString("gateway-name"),
+	}
+
+	escc.BaseURL = viper.GetString("webhook-url")
+	escc.AdminNamespace = viper.GetString("admin-namespace")
+
+	esController := esctrl.NewEventSourceIngressController(esi.Lister(), filteredServiceInfomer.Lister(), escc, ingressClient)
+	esi.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(new interface{}) {}})
+
+	esinformerFactory.Start(wait.NeverStop)
+	esinformerFactory.WaitForCacheSync(wait.NeverStop)
+
+	ctrl, err := controller.New("argoslower-eventsource-controller", mgr, controller.Options{
+		Reconciler: esController,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	if e := ctrl.Watch(&source.Informer{Informer: esi.Informer()}, &handler.EnqueueRequestForObject{}); e != nil {
+		return e
+	}
+
 	return mgr.Start(ctx)
+}
+
+func stringToMap(in, delim, split string) map[string]string {
+	out := map[string]string{}
+	for _, v := range strings.Split(in, delim) {
+		mark := strings.Index(v, split)
+		if mark < 0 {
+			continue
+		}
+		out[v[:mark]] = v[mark:]
+	}
+	return out
 }

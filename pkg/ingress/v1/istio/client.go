@@ -30,9 +30,11 @@ type IstioClient struct {
 	gatewaySelector map[string]string
 }
 
-func NewClient(cs istioclient.Interface) *IstioClient {
+func NewClient(cs istioclient.Interface, gs map[string]string) *IstioClient {
+	selector := maps.Clone(gs)
 	return &IstioClient{
-		client: cs,
+		client:          cs,
+		gatewaySelector: selector,
 	}
 }
 

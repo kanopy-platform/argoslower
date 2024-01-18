@@ -19,6 +19,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+type FakeConfigurator struct {
+}
+
+func (c *FakeConfigurator) Configure(config *EventSourceIngressConfig) ([]types.NamespacedName, error) {
+	return []types.NamespacedName{}, nil
+}
+
 type FakeESLister struct {
 	lister eslister.EventSourceNamespaceLister
 	eslister.EventSourceListerExpansion
@@ -99,7 +106,7 @@ func TestReconcile(t *testing.T) {
 		AdminNamespace: "adminnamespace",
 	}
 
-	controller := NewEventSourceIngressController(fakeESL, fakeSL, config)
+	controller := NewEventSourceIngressController(fakeESL, fakeSL, config, &FakeConfigurator{})
 
 	_, err := controller.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
 
