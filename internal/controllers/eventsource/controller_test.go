@@ -4,11 +4,14 @@ import (
 	"context"
 	"testing"
 
+	perrs "github.com/kanopy-platform/argoslower/pkg/errors"
+
 	ingresscommon "github.com/kanopy-platform/argoslower/pkg/ingress"
 
 	esv1alpha1 "github.com/argoproj/argo-events/pkg/apis/eventsource/v1alpha1"
 	eslister "github.com/argoproj/argo-events/pkg/client/eventsource/listers/eventsource/v1alpha1"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -88,12 +91,12 @@ func TestReconcile(t *testing.T) {
 	fakeSL.SetNamespaceLister(fakeNSL)
 
 	config := EventSourceIngressControllerConfig{
-		gateway: types.NamespacedName{
+		Gateway: types.NamespacedName{
 			Name:      "gateway",
 			Namespace: "gatewaynnamespace",
 		},
-		baseURL:        "webhooks.example.com",
-		adminNamespace: "adminnamespace",
+		BaseURL:        "webhooks.example.com",
+		AdminNamespace: "adminnamespace",
 	}
 
 	controller := NewEventSourceIngressController(fakeESL, fakeSL, config)
@@ -119,7 +122,10 @@ func TestReconcile(t *testing.T) {
 	fakeNESL.AppendES(es)
 
 	_, err = controller.Reconcile(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{Namespace: "foo", Name: "bar"}})
-	assert.NoError(t, err)
+	assert.Error(t, err)
+	re, ok := err.(*perrs.RetryableError)
+	require.True(t, ok)
+	require.False(t, re.IsRetryable())
 }
 
 type FakeServiceLister struct {

@@ -1,14 +1,13 @@
 package istio
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"strconv"
 
-	istioclient "istio.io/client-go/pkg/clientset/versioned"
-	isnetlister "istio.io/client-go/pkg/listers/networking/v1beta1"
-	isseclister "istio.io/client-go/pkg/listers/security/v1beta1"
-
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	netv1beta1 "istio.io/api/networking/v1beta1"
@@ -16,32 +15,88 @@ import (
 	isv1beta1 "istio.io/api/type/v1beta1"
 	isnetv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
 	issecv1beta1 "istio.io/client-go/pkg/apis/security/v1beta1"
+	netapplyv1beta1 "istio.io/client-go/pkg/applyconfiguration/networking/v1beta1"
+	secapplyv1beta1 "istio.io/client-go/pkg/applyconfiguration/security/v1beta1"
+	istioclient "istio.io/client-go/pkg/clientset/versioned"
 
+	esc "github.com/kanopy-platform/argoslower/internal/controllers/eventsource"
+	perrs "github.com/kanopy-platform/argoslower/pkg/errors"
 	common "github.com/kanopy-platform/argoslower/pkg/ingress"
 )
 
 // IstioClient provides a means of upserting rendered resource from an IstioConfig object
 type IstioClient struct {
-	client istioclient.Interface
-	vsl    isnetlister.VirtualServiceLister
-	apl    isseclister.AuthorizationPolicyLister
+	client          istioclient.Interface
+	gatewaySelector map[string]string
 }
 
-func NewClient(cs istioclient.Interface, vsl isnetlister.VirtualServiceLister, apl isseclister.AuthorizationPolicyLister) *IstioClient {
+func NewClient(cs istioclient.Interface) *IstioClient {
 	return &IstioClient{
 		client: cs,
-		vsl:    vsl,
-		apl:    apl,
 	}
 }
 
 // UpsertFromConfig creates or updates Virtual Serivces associated with an IstioConfig
 // It returns an error for unconfigured IstioConfigs
-func (i *IstioClient) UpsertFromConfig(config *IstioConfig) error {
+func (i *IstioClient) UpsertFromConfig(config *IstioConfig) (*isnetv1beta1.VirtualService, *issecv1beta1.AuthorizationPolicy, error) {
 
 	//TODO: code to create or apply VirtualService and AuthorizationPolicies
+	sec := i.client.SecurityV1beta1()
+	net := i.client.NetworkingV1beta1()
 
-	return nil
+	if !config.IsConfigured() {
+		return nil, nil, perrs.NewUnretryableError(errors.New("Unable to configure ingress"))
+	}
+
+	vs := config.GetVirtualService()
+	vsapply := netapplyv1beta1.VirtualService(vs.Name, vs.Namespace).
+		WithLabels(vs.Labels).
+		WithAnnotations(vs.Annotations).
+		WithSpec(vs.Spec)
+
+	ap := config.GetAuthorizationPolicy()
+	apapply := secapplyv1beta1.AuthorizationPolicy(ap.Name, ap.Namespace).
+		WithLabels(ap.Labels).
+		WithAnnotations(ap.Annotations).
+		WithSpec(ap.Spec)
+
+	applyOpts := metav1.ApplyOptions{
+		Force:        true,
+		FieldManager: "argoslower",
+	}
+
+	vso, err := net.VirtualServices(vs.Namespace).Apply(context.TODO(), vsapply, applyOpts)
+	if err != nil {
+		return vso, nil, err
+	}
+
+	apo, err := sec.AuthorizationPolicies(ap.Namespace).Apply(context.TODO(), apapply, applyOpts)
+	if err != nil {
+		return vso, apo, err
+	}
+
+	return vso, apo, err
+}
+
+func (i *IstioClient) Configure(config *esc.EventSourceIngressConfig) ([]types.NamespacedName, error) {
+	cidrs, err := config.Ipg.GetIPs()
+	out := []types.NamespacedName{}
+	if err != nil {
+		return out, perrs.NewUnretryableError(err)
+	}
+	c := NewIstioConfig(config.Gateway, i.gatewaySelector, config.BaseURL)
+	c.ConfigureAP(config.Es, cidrs, config.Endpoints)
+	c.ConfigureVS(config.Service, config.Es, config.Endpoints)
+
+	vs, ap, err := i.UpsertFromConfig(c)
+	if vs != nil {
+		out = append(out, types.NamespacedName{Namespace: vs.Namespace, Name: vs.Name})
+	}
+	if ap != nil {
+		out = append(out, types.NamespacedName{Namespace: vs.Namespace, Name: vs.Name})
+	}
+
+	return out, err
 }
 
 // IstioConfig contains global configuration for rendering istio VirtualService and AuthorizationPolicy
@@ -161,8 +216,8 @@ func (ic *IstioConfig) ConfigureVS(svc, es types.NamespacedName, endpoints map[s
 // per istio host match best practice.
 func (ic *IstioConfig) ConfigureAP(nsn types.NamespacedName, inCIDRs []string, endpoints map[string]common.NamedPath) {
 
-	cirds := make([]string, len(inCIDRs))
-	copy(cirds, inCIDRs)
+	cidrs := make([]string, len(inCIDRs))
+	copy(cidrs, inCIDRs)
 
 	pathPrefix := fmt.Sprintf("/%s/%s", nsn.Namespace, nsn.Name)
 	matcher := maps.Clone(ic.gwSelector)
@@ -172,6 +227,7 @@ func (ic *IstioConfig) ConfigureAP(nsn types.NamespacedName, inCIDRs []string, e
 			Selector: &isv1beta1.WorkloadSelector{
 				MatchLabels: matcher,
 			},
+			Action: secv1beta1.AuthorizationPolicy_DENY,
 		},
 	}
 	ap.Name = fmt.Sprintf("%s-%s", nsn.Namespace, nsn.Name)
@@ -187,12 +243,17 @@ func (ic *IstioConfig) ConfigureAP(nsn types.NamespacedName, inCIDRs []string, e
 		return
 	}
 
+	source := &secv1beta1.Source{}
+	if ap.Spec.Action == secv1beta1.AuthorizationPolicy_DENY {
+		source.NotIpBlocks = cidrs
+	} else {
+		source.IpBlocks = cidrs
+	}
+
 	rule := &secv1beta1.Rule{
 		From: []*secv1beta1.Rule_From{
 			&secv1beta1.Rule_From{
-				Source: &secv1beta1.Source{
-					IpBlocks: cirds,
-				},
+				Source: source,
 			},
 		},
 		To: []*secv1beta1.Rule_To{

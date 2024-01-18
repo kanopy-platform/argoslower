@@ -2,12 +2,14 @@ package eventsource
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	eshandler "github.com/kanopy-platform/argoslower/internal/admission/eventsource"
+	perrs "github.com/kanopy-platform/argoslower/pkg/errors"
 	ingresscommon "github.com/kanopy-platform/argoslower/pkg/ingress"
 	k8serror "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -25,21 +27,45 @@ import (
 type EventSourceIngressController struct {
 	esLister      eslister.EventSourceLister
 	serviceLister corev1lister.ServiceLister
+	igc           IngressConfigurator
 	config        EventSourceIngressControllerConfig
 }
 
 type EventSourceIngressControllerConfig struct {
-	gateway        types.NamespacedName
-	baseURL        string
-	adminNamespace string
+	Gateway        types.NamespacedName
+	BaseURL        string
+	AdminNamespace string
+	ipGetters      map[string]IPGetter
 }
 
-func NewEventSourceIngressController(esl eslister.EventSourceLister, svcl corev1lister.ServiceLister, config EventSourceIngressControllerConfig) *EventSourceIngressController {
+func NewEventSourceIngresControllerConfig() EventSourceIngressControllerConfig {
+	return EventSourceIngressControllerConfig{
+		ipGetters: map[string]IPGetter{},
+	}
+}
+func (c *EventSourceIngressControllerConfig) SetIPGetter(name string, getter IPGetter) {
+	if c.ipGetters == nil {
+		c.ipGetters = map[string]IPGetter{}
+	}
+
+	c.ipGetters[name] = getter
+}
+
+func NewEventSourceIngressController(esl eslister.EventSourceLister, svcl corev1lister.ServiceLister, config EventSourceIngressControllerConfig, igc IngressConfigurator) *EventSourceIngressController {
 	return &EventSourceIngressController{
 		esLister:      esl,
 		serviceLister: svcl,
 		config:        config,
+		igc:           igc,
 	}
+}
+
+func (e *EventSourceIngressController) SetIPGetter(name string, getter IPGetter) {
+	if e.config.ipGetters == nil {
+		e.config.ipGetters = map[string]IPGetter{}
+	}
+
+	e.config.ipGetters[name] = getter
 }
 
 func (e *EventSourceIngressController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -54,8 +80,13 @@ func (e *EventSourceIngressController) Reconcile(ctx context.Context, req ctrl.R
 	}
 
 	if err = e.reconcile(ctx, eventSource.DeepCopy(), req.NamespacedName); err != nil {
+		var retry bool
+		rerr, ok := err.(*perrs.RetryableError)
+		if ok {
+			retry = rerr.IsRetryable()
+		}
 		return ctrl.Result{
-			Requeue: true,
+			Requeue: retry,
 		}, err
 	}
 
@@ -68,9 +99,10 @@ func (e *EventSourceIngressController) reconcile(ctx context.Context, es *esv1al
 	log.V(5).Info("Starting reconciliation for %s/%s", nsn.Namespace, nsn.Name)
 
 	esiConfig := EventSourceIngressConfig{
-		es:             nsn,
-		gateway:        e.config.gateway,
-		adminNamespace: e.config.adminNamespace,
+		Es:             nsn,
+		Gateway:        e.config.Gateway,
+		AdminNamespace: e.config.AdminNamespace,
+		BaseURL:        e.config.BaseURL,
 	}
 	if es == nil {
 		//TODO: implement garbage collection we should be able to use the NamespacedName to associated vanity resources to the namespace/eventsource
@@ -98,44 +130,46 @@ func (e *EventSourceIngressController) reconcile(ctx context.Context, es *esv1al
 		}),
 	)
 	if err != nil {
-		return err
+		return perrs.NewUnretryableError(err)
 	}
 
 	svcl, err := e.serviceLister.Services(nsn.Namespace).List(selector)
 	if err != nil {
-		return err
+		return perrs.NewRetryableError(err)
 	}
 
 	if len(svcl) != 1 {
-		return fmt.Errorf("Cannot Select a service for event source %s/%s. Want 1 received: %d", nsn.Namespace, nsn.Name, len(svcl))
+		return perrs.NewRetryableError(fmt.Errorf("Cannot Select a service for event source %s/%s. Want 1 received: %d", nsn.Namespace, nsn.Name, len(svcl)))
 	}
 
 	svc := svcl[0]
 	if svc == nil {
-		return fmt.Errorf("Expected a Service resource and got: %v", svc)
+		//This might not be retryable if the api is returning a nil service but we will requeue for now
+		return perrs.NewRetryableError(fmt.Errorf("Expected a Service resource and got: %v", svc))
+	}
+
+	esiConfig.Service = types.NamespacedName{
+		Namespace: svc.Namespace,
+		Name:      svc.Name,
 	}
 
 	// Populate the Service to EventSource lookup map
-	esiConfig.endpoints = ServiceToPortMapping(svc, es)
-	if len(esiConfig.endpoints) == 0 {
+	esiConfig.Endpoints = ServiceToPortMapping(svc, es)
+	if len(esiConfig.Endpoints) == 0 {
 		//TODO: we might want to emit an event here for a misconfigured eventsource
 		// the port on the webhook configuration doesn't appear on the service definition
 		// it is excluded because it isn't routable
-		return nil
+		msg := fmt.Sprintf("Unabled to map eventsource  %s.service to endpoints.", nsn.String())
+		return perrs.NewUnretryableError(errors.New(msg))
 	}
 
-	switch hookType {
-	case "github":
-		//TODO: set github ip getter
-
-	case "jira":
-		//TODO: set jira ip getter
-
-	default:
-		//TODO: Log event for unsupported webhook type
-		return nil
-
+	ipGetter, ok := e.config.ipGetters[hookType]
+	if !ok {
+		msg := fmt.Sprintf("EventSource %s Hook type: %s, not supported", nsn.String(), hookType)
+		return perrs.NewUnretryableError(errors.New(msg))
 	}
+
+	esiConfig.Ipg = ipGetter
 	return nil
 }
 
@@ -143,12 +177,13 @@ func (e *EventSourceIngressController) reconcile(ctx context.Context, es *esv1al
 // ingress resources mapped to the service of an argo event source.
 // it is ingress provider agnostic.
 type EventSourceIngressConfig struct {
-	//	ipg            IPGetter
-	es             types.NamespacedName
-	endpoints      map[string]ingresscommon.NamedPath
-	adminNamespace string
-	//	baseURL        string
-	gateway types.NamespacedName
+	Ipg            IPGetter
+	Es             types.NamespacedName
+	Endpoints      map[string]ingresscommon.NamedPath
+	AdminNamespace string
+	BaseURL        string
+	Gateway        types.NamespacedName
+	Service        types.NamespacedName
 }
 
 // ServiceToPortMapping - receives a Service and argo EventSource and returns a validated port lookup map of
@@ -194,4 +229,8 @@ func ServiceToPortMapping(svc *corev1.Service, es *esv1alpha1.EventSource) (out 
 // IPGetter defines an interface for ip address providers to get source CIDRs
 type IPGetter interface {
 	GetIPs() ([]string, error)
+}
+
+type IngressConfigurator interface {
+	Configure(config *EventSourceIngressConfig) ([]types.NamespacedName, error)
 }

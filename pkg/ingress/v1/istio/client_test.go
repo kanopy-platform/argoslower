@@ -120,7 +120,7 @@ func TestConfigureAP(t *testing.T) {
 			continue
 		}
 
-		assert.Equal(t, test.cidrs, ap.Spec.Rules[0].From[0].Source.IpBlocks, test.name)
+		assert.Equal(t, test.cidrs, ap.Spec.Rules[0].From[0].Source.NotIpBlocks, test.name)
 		assert.Equal(t, len(test.endpoints), len(ap.Spec.Rules[0].To[0].Operation.Paths), test.name)
 		for _, endpoint := range test.endpoints {
 			path := fmt.Sprintf("/%s/%s%s/*", test.es.Namespace, test.es.Name, endpoint.Path)
