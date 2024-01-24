@@ -86,7 +86,7 @@ func (i *IstioClient) Configure(config *esc.EventSourceIngressConfig) ([]types.N
 	if err != nil {
 		return out, perrs.NewUnretryableError(err)
 	}
-	c := NewIstioConfig(config.Gateway, i.gatewaySelector, config.BaseURL)
+	c := NewIstioConfig(config.AdminNamespace, config.Gateway, i.gatewaySelector, config.BaseURL)
 	c.ConfigureAP(config.Es, cidrs, config.Endpoints)
 	c.ConfigureVS(config.Service, config.Es, config.Endpoints)
 
@@ -107,14 +107,16 @@ type IstioConfig struct {
 	ap         *issecv1beta1.AuthorizationPolicy
 	vs         *isnetv1beta1.VirtualService
 	gateway    types.NamespacedName
+	adminNS    string
 	gwSelector map[string]string
 	baseURL    string
 }
 
-func NewIstioConfig(gw types.NamespacedName, gws map[string]string, baseURL string) *IstioConfig {
+func NewIstioConfig(adminNS string, gw types.NamespacedName, gws map[string]string, baseURL string) *IstioConfig {
 	selector := maps.Clone(gws)
 	return &IstioConfig{
 		gateway:    gw,
+		adminNS:    adminNS,
 		gwSelector: selector,
 		baseURL:    baseURL,
 	}
@@ -197,6 +199,7 @@ func (ic *IstioConfig) ConfigureVS(svc, es types.NamespacedName, endpoints map[s
 					},
 				},
 			},
+			Rewrite: &netv1beta1.HTTPRewrite{Uri: "/"},
 		}
 
 		routes[index] = &route
@@ -233,7 +236,7 @@ func (ic *IstioConfig) ConfigureAP(nsn types.NamespacedName, inCIDRs []string, e
 		},
 	}
 	ap.Name = fmt.Sprintf("%s-%s", nsn.Namespace, nsn.Name)
-	ap.Namespace = ic.gateway.Namespace
+	ap.Namespace = ic.adminNS
 
 	paths := make([]string, len(endpoints))
 	index := 0
