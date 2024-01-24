@@ -6,31 +6,38 @@ import (
 
 	common "github.com/kanopy-platform/argoslower/pkg/ingress"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/types"
 )
 
 func TestConfigureVS(t *testing.T) {
-	ic := &IstioConfig{
-		baseURL: "gateway.example.com",
-		gateway: types.NamespacedName{
-			Name:      "gateway",
-			Namespace: "routing",
-		},
-	}
+	ic := NewIstioConfig()
 
 	tests := []struct {
 		name      string
+		baseURL   string
+		gateway   types.NamespacedName
 		svc       types.NamespacedName
 		es        types.NamespacedName
 		endpoints map[string]common.NamedPath
-		isNil     bool
+		err       bool
 	}{
 		{
-			name:  "empty",
-			isNil: true,
+			name:    "empty",
+			baseURL: "gateway.example.com",
+			gateway: types.NamespacedName{
+				Name:      "gateway",
+				Namespace: "routing",
+			},
+			err: true,
 		},
 		{
-			name: "basic",
+			name:    "basic",
+			baseURL: "gateway.example.com",
+			gateway: types.NamespacedName{
+				Name:      "gateway",
+				Namespace: "routing",
+			},
 			svc: types.NamespacedName{
 				Name:      "upstreamservice",
 				Namespace: "destination",
@@ -53,12 +60,15 @@ func TestConfigureVS(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		ic.ConfigureVS(test.svc, test.es, test.endpoints)
-		vs := ic.GetVirtualService()
-		if test.isNil {
-			assert.Nil(t, vs)
+		err := ic.ConfigureVS(test.baseURL, test.gateway, test.svc, test.es, test.endpoints)
+		if test.err {
+			assert.Error(t, err, test.name)
 			continue
 		}
+		assert.NoError(t, err, test.name)
+
+		vs := ic.GetVirtualService()
+		require.NotNil(t, vs, test.name)
 
 		for _, route := range vs.Spec.Http {
 			// destination should be the fully qualified internal service name
@@ -74,27 +84,34 @@ func TestConfigureVS(t *testing.T) {
 }
 
 func TestConfigureAP(t *testing.T) {
-	ic := &IstioConfig{
-		baseURL: "gateway.example.com",
-		gateway: types.NamespacedName{
-			Name:      "gateway",
-			Namespace: "routing",
-		},
-	}
+	ic := NewIstioConfig()
 
 	tests := []struct {
 		name      string
+		adminNS   string
+		baseURL   string
+		gws       map[string]string
 		es        types.NamespacedName
 		cidrs     []string
 		endpoints map[string]common.NamedPath
-		isNil     bool
+		err       bool
 	}{
 		{
-			name:  "empty",
-			isNil: true,
+			name:    "empty",
+			adminNS: "routing",
+			baseURL: "gateway.example.com",
+			gws: map[string]string{
+				"istio": "example-ingressgateway",
+			},
+			err: true,
 		},
 		{
-			name: "basic",
+			name:    "basic",
+			adminNS: "routing",
+			baseURL: "gateway.example.com",
+			gws: map[string]string{
+				"istio": "example-ingressgateway",
+			},
 			es: types.NamespacedName{
 				Name:      "eventsource",
 				Namespace: "destination",
@@ -113,13 +130,18 @@ func TestConfigureAP(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		ic.ConfigureAP(test.es, test.cidrs, test.endpoints)
-		ap := ic.GetAuthorizationPolicy()
-		if test.isNil {
-			assert.Nil(t, ap, test.name)
+		err := ic.ConfigureAP(test.adminNS, test.baseURL, test.es, test.cidrs, test.endpoints, test.gws)
+		if test.err {
+			assert.Error(t, err, test.name)
 			continue
 		}
 
+		assert.NoError(t, err, test.name)
+
+		ap := ic.GetAuthorizationPolicy()
+		require.NotNil(t, ap, test.name)
+
+		assert.Equal(t, test.adminNS, ap.Namespace, test.name)
 		assert.Equal(t, test.cidrs, ap.Spec.Rules[0].From[0].Source.NotIpBlocks, test.name)
 		assert.Equal(t, len(test.endpoints), len(ap.Spec.Rules[0].To[0].Operation.Paths), test.name)
 		for _, endpoint := range test.endpoints {

@@ -86,9 +86,14 @@ func (i *IstioClient) Configure(config *esc.EventSourceIngressConfig) ([]types.N
 	if err != nil {
 		return out, perrs.NewUnretryableError(err)
 	}
-	c := NewIstioConfig(config.AdminNamespace, config.Gateway, i.gatewaySelector, config.BaseURL)
-	c.ConfigureAP(config.Es, cidrs, config.Endpoints)
-	c.ConfigureVS(config.Service, config.Es, config.Endpoints)
+
+	c := NewIstioConfig()
+	if e := c.ConfigureAP(config.AdminNamespace, config.BaseURL, config.Es, cidrs, config.Endpoints, i.gatewaySelector); e != nil {
+		return out, e
+	}
+	if e := c.ConfigureVS(config.BaseURL, config.Gateway, config.Service, config.Es, config.Endpoints); e != nil {
+		return out, e
+	}
 
 	vs, ap, err := i.UpsertFromConfig(c)
 	if vs != nil {
@@ -104,22 +109,12 @@ func (i *IstioClient) Configure(config *esc.EventSourceIngressConfig) ([]types.N
 // IstioConfig contains global configuration for rendering istio VirtualService and AuthorizationPolicy
 // resources from a port to endpoint mapping.
 type IstioConfig struct {
-	ap         *issecv1beta1.AuthorizationPolicy
-	vs         *isnetv1beta1.VirtualService
-	gateway    types.NamespacedName
-	adminNS    string
-	gwSelector map[string]string
-	baseURL    string
+	ap *issecv1beta1.AuthorizationPolicy
+	vs *isnetv1beta1.VirtualService
 }
 
-func NewIstioConfig(adminNS string, gw types.NamespacedName, gws map[string]string, baseURL string) *IstioConfig {
-	selector := maps.Clone(gws)
-	return &IstioConfig{
-		gateway:    gw,
-		adminNS:    adminNS,
-		gwSelector: selector,
-		baseURL:    baseURL,
-	}
+func NewIstioConfig() *IstioConfig {
+	return &IstioConfig{}
 }
 
 // GetVirtualService returns the current configured or unconfigured virtual service
@@ -150,19 +145,19 @@ func (ic *IstioConfig) IsConfigured() bool {
 // base url in the format baseURL/es.Namespace/es.Name/endpoint/ as a prefix match.
 // The virtual service targets the fully qualified internal service host name on the port assigned
 // to the endpoint in the port mapping.
-func (ic *IstioConfig) ConfigureVS(svc, es types.NamespacedName, endpoints map[string]common.NamedPath) {
-	host := ic.baseURL
+func (ic *IstioConfig) ConfigureVS(url string, gw, svc, es types.NamespacedName, endpoints map[string]common.NamedPath) error {
+	host := url
 	pathPrefix := fmt.Sprintf("/%s/%s", es.Namespace, es.Name)
 	svcHost := fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, svc.Namespace)
 
 	vs := isnetv1beta1.VirtualService{
 		Spec: netv1beta1.VirtualService{
 			Hosts:    []string{host},
-			Gateways: []string{ic.gateway.String()},
+			Gateways: []string{gw.String()},
 		},
 	}
 	vs.Name = fmt.Sprintf("%s-%s", es.Namespace, es.Name)
-	vs.Namespace = ic.gateway.Namespace
+	vs.Namespace = gw.Namespace
 
 	vs.Labels = map[string]string{
 		"eventsource-name":      es.Name,
@@ -207,25 +202,25 @@ func (ic *IstioConfig) ConfigureVS(svc, es types.NamespacedName, endpoints map[s
 	}
 
 	if len(routes) == 0 {
-		fmt.Println("no routes")
-		return
+		return fmt.Errorf("No viable routes for EventSource %s and Service %s", es.String(), svc.String())
 	}
 
 	vs.Spec.Http = routes
 	ic.vs = &vs
+	return nil
 }
 
 // ConfigureAP configures the IstioConfig.ap field with an AuthorizationPolicy base on the inputs.
 // The AP will contain a single rule that contains the full IP CIDR list and all paths from the
 // endpoint mapping with a glob match. The AP will match the baseURL and baseURL:* hostnames
 // per istio host match best practice.
-func (ic *IstioConfig) ConfigureAP(nsn types.NamespacedName, inCIDRs []string, endpoints map[string]common.NamedPath) {
+func (ic *IstioConfig) ConfigureAP(adminns, url string, nsn types.NamespacedName, inCIDRs []string, endpoints map[string]common.NamedPath, gws map[string]string) error {
 
 	cidrs := make([]string, len(inCIDRs))
 	copy(cidrs, inCIDRs)
 
 	pathPrefix := fmt.Sprintf("/%s/%s", nsn.Namespace, nsn.Name)
-	matcher := maps.Clone(ic.gwSelector)
+	matcher := maps.Clone(gws)
 
 	ap := issecv1beta1.AuthorizationPolicy{
 		Spec: secv1beta1.AuthorizationPolicy{
@@ -236,7 +231,7 @@ func (ic *IstioConfig) ConfigureAP(nsn types.NamespacedName, inCIDRs []string, e
 		},
 	}
 	ap.Name = fmt.Sprintf("%s-%s", nsn.Namespace, nsn.Name)
-	ap.Namespace = ic.adminNS
+	ap.Namespace = adminns
 
 	paths := make([]string, len(endpoints))
 	index := 0
@@ -245,7 +240,7 @@ func (ic *IstioConfig) ConfigureAP(nsn types.NamespacedName, inCIDRs []string, e
 		index++
 	}
 	if len(paths) == 0 {
-		return
+		return fmt.Errorf("EventSource %s has no valid paths for its service configuration.", nsn.String())
 	}
 
 	source := &secv1beta1.Source{}
@@ -265,8 +260,8 @@ func (ic *IstioConfig) ConfigureAP(nsn types.NamespacedName, inCIDRs []string, e
 			&secv1beta1.Rule_To{
 				Operation: &secv1beta1.Operation{
 					Hosts: []string{
-						ic.baseURL,
-						fmt.Sprintf("%s:*", ic.baseURL),
+						url,
+						fmt.Sprintf("%s:*", url),
 					},
 					Paths: paths,
 				},
@@ -277,4 +272,5 @@ func (ic *IstioConfig) ConfigureAP(nsn types.NamespacedName, inCIDRs []string, e
 	ap.Spec.Rules = append(ap.Spec.Rules, rule)
 
 	ic.ap = &ap
+	return nil
 }
