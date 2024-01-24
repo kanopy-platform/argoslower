@@ -235,6 +235,10 @@ func (ic *IstioConfig) ConfigureAP(adminns, url string, nsn types.NamespacedName
 	}
 	ap.Name = fmt.Sprintf("%s-%s", nsn.Namespace, nsn.Name)
 	ap.Namespace = adminns
+	ap.Labels = map[string]string{
+		"eventsource-name":      nsn.Name,
+		"eventsource-namespace": nsn.Namespace,
+	}
 
 	paths := make([]string, len(endpoints))
 	index := 0
