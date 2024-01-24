@@ -53,14 +53,17 @@ func (i *IstioClient) UpsertFromConfig(config *IstioConfig) (*isnetv1beta1.Virtu
 	vs := config.GetVirtualService()
 	vsapply := netapplyv1beta1.VirtualService(vs.Name, vs.Namespace).
 		WithLabels(vs.Labels).
-		WithAnnotations(vs.Annotations).
-		WithSpec(vs.Spec)
+		WithAnnotations(vs.Annotations)
+
+	// the netapplyv1beta1.VirtualServiceApplyConfiguration.WithSpec function copies locks by passing a VirtualService Spec by value
+	vsapply.Spec = &vs.Spec
 
 	ap := config.GetAuthorizationPolicy()
 	apapply := secapplyv1beta1.AuthorizationPolicy(ap.Name, ap.Namespace).
 		WithLabels(ap.Labels).
-		WithAnnotations(ap.Annotations).
-		WithSpec(ap.Spec)
+		WithAnnotations(ap.Annotations)
+	// the secapplyv1beta1.AuhtorizationPolicyApplyConfiguration.WithSpec function copies locks by passing a VirtualService Spec by value
+	apapply.Spec = &ap.Spec
 
 	applyOpts := metav1.ApplyOptions{
 		Force:        true,
