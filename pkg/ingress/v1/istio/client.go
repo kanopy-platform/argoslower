@@ -19,9 +19,9 @@ import (
 	secapplyv1beta1 "istio.io/client-go/pkg/applyconfiguration/security/v1beta1"
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
 
-	esc "github.com/kanopy-platform/argoslower/internal/controllers/eventsource"
 	perrs "github.com/kanopy-platform/argoslower/pkg/errors"
 	common "github.com/kanopy-platform/argoslower/pkg/ingress"
+	v1 "github.com/kanopy-platform/argoslower/pkg/ingress/v1"
 )
 
 // IstioClient provides a means of upserting rendered resource from an IstioConfig object
@@ -83,7 +83,7 @@ func (i *IstioClient) UpsertFromConfig(config *IstioConfig) (*isnetv1beta1.Virtu
 	return vso, apo, err
 }
 
-func (i *IstioClient) Configure(config *esc.EventSourceIngressConfig) ([]types.NamespacedName, error) {
+func (i *IstioClient) Configure(config *v1.EventSourceIngressConfig) ([]types.NamespacedName, error) {
 	cidrs, err := config.Ipg.GetIPs()
 	out := []types.NamespacedName{}
 	if err != nil {

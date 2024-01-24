@@ -11,6 +11,7 @@ import (
 	eshandler "github.com/kanopy-platform/argoslower/internal/admission/eventsource"
 	perrs "github.com/kanopy-platform/argoslower/pkg/errors"
 	ingresscommon "github.com/kanopy-platform/argoslower/pkg/ingress"
+	v1 "github.com/kanopy-platform/argoslower/pkg/ingress/v1"
 	k8serror "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -27,7 +28,7 @@ import (
 type EventSourceIngressController struct {
 	esLister      eslister.EventSourceLister
 	serviceLister corev1lister.ServiceLister
-	igc           IngressConfigurator
+	igc           v1.IngressConfigurator
 	config        EventSourceIngressControllerConfig
 }
 
@@ -35,23 +36,23 @@ type EventSourceIngressControllerConfig struct {
 	Gateway        types.NamespacedName
 	BaseURL        string
 	AdminNamespace string
-	ipGetters      map[string]IPGetter
+	ipGetters      map[string]v1.IPGetter
 }
 
 func NewEventSourceIngressControllerConfig() EventSourceIngressControllerConfig {
 	return EventSourceIngressControllerConfig{
-		ipGetters: map[string]IPGetter{},
+		ipGetters: map[string]v1.IPGetter{},
 	}
 }
-func (c *EventSourceIngressControllerConfig) SetIPGetter(name string, getter IPGetter) {
+func (c *EventSourceIngressControllerConfig) SetIPGetter(name string, getter v1.IPGetter) {
 	if c.ipGetters == nil {
-		c.ipGetters = map[string]IPGetter{}
+		c.ipGetters = map[string]v1.IPGetter{}
 	}
 
 	c.ipGetters[name] = getter
 }
 
-func NewEventSourceIngressController(esl eslister.EventSourceLister, svcl corev1lister.ServiceLister, config EventSourceIngressControllerConfig, igc IngressConfigurator) *EventSourceIngressController {
+func NewEventSourceIngressController(esl eslister.EventSourceLister, svcl corev1lister.ServiceLister, config EventSourceIngressControllerConfig, igc v1.IngressConfigurator) *EventSourceIngressController {
 	return &EventSourceIngressController{
 		esLister:      esl,
 		serviceLister: svcl,
@@ -60,9 +61,9 @@ func NewEventSourceIngressController(esl eslister.EventSourceLister, svcl corev1
 	}
 }
 
-func (e *EventSourceIngressController) SetIPGetter(name string, getter IPGetter) {
+func (e *EventSourceIngressController) SetIPGetter(name string, getter v1.IPGetter) {
 	if e.config.ipGetters == nil {
-		e.config.ipGetters = map[string]IPGetter{}
+		e.config.ipGetters = map[string]v1.IPGetter{}
 	}
 
 	e.config.ipGetters[name] = getter
@@ -98,7 +99,7 @@ func (e *EventSourceIngressController) reconcile(ctx context.Context, es *esv1al
 	log := log.FromContext(ctx)
 	log.V(5).Info("Starting reconciliation for %s/%s", nsn.Namespace, nsn.Name)
 
-	esiConfig := EventSourceIngressConfig{
+	esiConfig := v1.EventSourceIngressConfig{
 		Es:             nsn,
 		Gateway:        e.config.Gateway,
 		AdminNamespace: e.config.AdminNamespace,
@@ -170,20 +171,9 @@ func (e *EventSourceIngressController) reconcile(ctx context.Context, es *esv1al
 	}
 
 	esiConfig.Ipg = ipGetter
-	return nil
-}
-
-// EventSourceIngressConfig provides the information needed for rendering
-// ingress resources mapped to the service of an argo event source.
-// it is ingress provider agnostic.
-type EventSourceIngressConfig struct {
-	Ipg            IPGetter
-	Es             types.NamespacedName
-	Endpoints      map[string]ingresscommon.NamedPath
-	AdminNamespace string
-	BaseURL        string
-	Gateway        types.NamespacedName
-	Service        types.NamespacedName
+	name, err := e.igc.Configure(&esiConfig)
+	fmt.Println(name)
+	return err
 }
 
 // ServiceToPortMapping - receives a Service and argo EventSource and returns a validated port lookup map of
@@ -224,13 +214,4 @@ func ServiceToPortMapping(svc *corev1.Service, es *esv1alpha1.EventSource) (out 
 	}
 
 	return out
-}
-
-// IPGetter defines an interface for ip address providers to get source CIDRs
-type IPGetter interface {
-	GetIPs() ([]string, error)
-}
-
-type IngressConfigurator interface {
-	Configure(config *EventSourceIngressConfig) ([]types.NamespacedName, error)
 }

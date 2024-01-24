@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	perrs "github.com/kanopy-platform/argoslower/pkg/errors"
-
 	ingresscommon "github.com/kanopy-platform/argoslower/pkg/ingress"
+	v1 "github.com/kanopy-platform/argoslower/pkg/ingress/v1"
 
 	esv1alpha1 "github.com/argoproj/argo-events/pkg/apis/eventsource/v1alpha1"
 	eslister "github.com/argoproj/argo-events/pkg/client/eventsource/listers/eventsource/v1alpha1"
@@ -22,7 +22,7 @@ import (
 type FakeConfigurator struct {
 }
 
-func (c *FakeConfigurator) Configure(config *EventSourceIngressConfig) ([]types.NamespacedName, error) {
+func (c *FakeConfigurator) Configure(config *v1.EventSourceIngressConfig) ([]types.NamespacedName, error) {
 	return []types.NamespacedName{}, nil
 }
 
