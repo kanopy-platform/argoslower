@@ -70,8 +70,8 @@ func TestConfigureVS(t *testing.T) {
 		vs := ic.GetVirtualService()
 		require.NotNil(t, vs, test.name)
 
-		assert.Equal(t, test.es.Name, vs.Labels["eventsource-name"], test)
-		assert.Equal(t, test.es.Namespace, vs.Labels["eventsource-namespace"], test)
+		assert.Equal(t, test.es.Name, vs.Labels[common.EventSourceNameString], test)
+		assert.Equal(t, test.es.Namespace, vs.Labels[common.EventSourceNamespaceString], test)
 
 		for _, route := range vs.Spec.Http {
 			// destination should be the fully qualified internal service name
@@ -147,8 +147,8 @@ func TestConfigureAP(t *testing.T) {
 		assert.Equal(t, test.adminNS, ap.Namespace, test.name)
 		assert.Equal(t, test.cidrs, ap.Spec.Rules[0].From[0].Source.NotIpBlocks, test.name)
 
-		assert.Equal(t, test.es.Name, ap.Labels["eventsource-name"], test)
-		assert.Equal(t, test.es.Namespace, ap.Labels["eventsource-namespace"], test)
+		assert.Equal(t, test.es.Name, ap.Labels[common.EventSourceNameString], test)
+		assert.Equal(t, test.es.Namespace, ap.Labels[common.EventSourceNamespaceString], test)
 
 		assert.Equal(t, len(test.endpoints), len(ap.Spec.Rules[0].To[0].Operation.Paths), test.name)
 		for _, endpoint := range test.endpoints {

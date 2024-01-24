@@ -22,8 +22,12 @@ import (
 type FakeConfigurator struct {
 }
 
-func (c *FakeConfigurator) Configure(config *v1.EventSourceIngressConfig) ([]types.NamespacedName, error) {
+func (c *FakeConfigurator) Configure(ctx context.Context, config *v1.EventSourceIngressConfig) ([]types.NamespacedName, error) {
 	return []types.NamespacedName{}, nil
+}
+
+func (c *FakeConfigurator) Remove(ctx context.Context, config *v1.EventSourceIngressConfig) error {
+	return nil
 }
 
 type FakeESLister struct {

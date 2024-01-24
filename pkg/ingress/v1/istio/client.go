@@ -7,8 +7,10 @@ import (
 	"maps"
 	"strconv"
 
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	netv1beta1 "istio.io/api/networking/v1beta1"
 	secv1beta1 "istio.io/api/security/v1beta1"
@@ -38,11 +40,51 @@ func NewClient(cs istioclient.Interface, gs map[string]string) *IstioClient {
 	}
 }
 
+func (i *IstioClient) Remove(ctx context.Context, config *v1.EventSourceIngressConfig) error {
+
+	log := log.FromContext(ctx)
+
+	sec := i.client.SecurityV1beta1()
+	net := i.client.NetworkingV1beta1()
+
+	if config == nil || config.Es.Name == "" || config.Es.Namespace == "" || config.AdminNamespace == "" || config.Gateway.Namespace == "" {
+		return perrs.NewUnretryableError(fmt.Errorf("Empty namespaced name for event source"))
+	}
+
+	selector := fmt.Sprintf("%s=%s,%s=%s", common.EventSourceNameString, config.Es.Name, common.EventSourceNamespaceString, config.Es.Namespace)
+
+	listOpts := metav1.ListOptions{
+		LabelSelector: selector,
+	}
+
+	apErr := sec.AuthorizationPolicies(config.AdminNamespace).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, listOpts)
+	vsErr := net.VirtualServices(config.Gateway.Namespace).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, listOpts)
+
+	if apErr == nil && vsErr == nil {
+		return nil
+	}
+
+	var errString string
+	if apErr != nil && !k8serrors.IsNotFound(apErr) {
+		log.V(5).Info("Istio api communication failure: %s", apErr.Error())
+		errString = fmt.Sprintf("%s%s", config.Es.String(), apErr.Error())
+	}
+	if vsErr != nil && !k8serrors.IsNotFound(vsErr) {
+		log.V(5).Info("Istio api communication failure: %s", apErr.Error())
+		errString = fmt.Sprintf("%s%s", config.Es.String(), vsErr.Error())
+	}
+
+	if errString == "" {
+		return nil
+	}
+
+	return perrs.NewRetryableError(fmt.Errorf("Deleteion errors for selector %s: %s", selector, errString))
+}
+
 // UpsertFromConfig creates or updates Virtual Serivces associated with an IstioConfig
 // It returns an error for unconfigured IstioConfigs
-func (i *IstioClient) UpsertFromConfig(config *IstioConfig) (*isnetv1beta1.VirtualService, *issecv1beta1.AuthorizationPolicy, error) {
+func (i *IstioClient) upsertFromConfig(config *IstioConfig) (*isnetv1beta1.VirtualService, *issecv1beta1.AuthorizationPolicy, error) {
 
-	//TODO: code to create or apply VirtualService and AuthorizationPolicies
 	sec := i.client.SecurityV1beta1()
 	net := i.client.NetworkingV1beta1()
 
@@ -83,22 +125,28 @@ func (i *IstioClient) UpsertFromConfig(config *IstioConfig) (*isnetv1beta1.Virtu
 	return vso, apo, err
 }
 
-func (i *IstioClient) Configure(config *v1.EventSourceIngressConfig) ([]types.NamespacedName, error) {
+func (i *IstioClient) Configure(ctx context.Context, config *v1.EventSourceIngressConfig) ([]types.NamespacedName, error) {
+	log := log.FromContext(ctx)
+
 	cidrs, err := config.Ipg.GetIPs()
+
 	out := []types.NamespacedName{}
 	if err != nil {
+		log.V(5).Info("Ip Getter yielded no ips")
 		return out, perrs.NewUnretryableError(err)
 	}
 
 	c := NewIstioConfig()
 	if e := c.ConfigureAP(config.AdminNamespace, config.BaseURL, config.Es, cidrs, config.Endpoints, i.gatewaySelector); e != nil {
+		log.V(5).Info("AuthroizationPolicy generation failure for %s", config.Es.String())
 		return out, e
 	}
 	if e := c.ConfigureVS(config.BaseURL, config.Gateway, config.Service, config.Es, config.Endpoints); e != nil {
+		log.V(5).Info("VirtualService generation failure for %s", config.Es.String())
 		return out, e
 	}
 
-	vs, ap, err := i.UpsertFromConfig(c)
+	vs, ap, err := i.upsertFromConfig(c)
 	if vs != nil {
 		out = append(out, types.NamespacedName{Namespace: vs.Namespace, Name: vs.Name})
 	}
@@ -163,8 +211,8 @@ func (ic *IstioConfig) ConfigureVS(url string, gw, svc, es types.NamespacedName,
 	vs.Namespace = gw.Namespace
 
 	vs.Labels = map[string]string{
-		"eventsource-name":      es.Name,
-		"eventsource-namespace": es.Namespace,
+		common.EventSourceNameString:      es.Name,
+		common.EventSourceNamespaceString: es.Namespace,
 	}
 
 	routes := make([]*netv1beta1.HTTPRoute, len(endpoints))

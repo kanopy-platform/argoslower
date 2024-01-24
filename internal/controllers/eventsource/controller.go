@@ -106,17 +106,7 @@ func (e *EventSourceIngressController) reconcile(ctx context.Context, es *esv1al
 		BaseURL:        e.config.BaseURL,
 	}
 	if es == nil {
-		//TODO: implement garbage collection we should be able to use the NamespacedName to associated vanity resources to the namespace/eventsource
-		// event source svc labels
-		//   labels:
-		//      controller: eventsource-controller
-		//      eventsource-name: demo-day
-		//      owner-name: demo-day
-		// look up and delete virtual service
-		// look up and delete authorization policy
-		//
-		// look up and delete virtual service delegate
-		return nil
+		return e.igc.Remove(ctx, &esiConfig)
 	}
 
 	hookType, ok := es.Annotations[eshandler.DefaultAnnotationKey]
@@ -134,6 +124,7 @@ func (e *EventSourceIngressController) reconcile(ctx context.Context, es *esv1al
 		return perrs.NewUnretryableError(err)
 	}
 
+	log.V(5).Info("Sourcing service for eventsource  %s/%s", nsn.Namespace, nsn.Name)
 	svcl, err := e.serviceLister.Services(nsn.Namespace).List(selector)
 	if err != nil {
 		return perrs.NewRetryableError(err)
@@ -171,8 +162,8 @@ func (e *EventSourceIngressController) reconcile(ctx context.Context, es *esv1al
 	}
 
 	esiConfig.Ipg = ipGetter
-	name, err := e.igc.Configure(&esiConfig)
-	fmt.Println(name)
+	names, err := e.igc.Configure(ctx, &esiConfig)
+	log.V(5).Info("Created resources %s", names)
 	return err
 }
 

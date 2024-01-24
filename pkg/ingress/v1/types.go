@@ -1,6 +1,8 @@
 package v1
 
 import (
+	"context"
+
 	ingresscommon "github.com/kanopy-platform/argoslower/pkg/ingress"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -24,5 +26,6 @@ type IPGetter interface {
 }
 
 type IngressConfigurator interface {
-	Configure(config *EventSourceIngressConfig) ([]types.NamespacedName, error)
+	Configure(ctx context.Context, config *EventSourceIngressConfig) ([]types.NamespacedName, error)
+	Remove(ctx context.Context, config *EventSourceIngressConfig) error
 }
