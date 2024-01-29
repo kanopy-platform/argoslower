@@ -12,6 +12,12 @@ import (
 	sadd "github.com/kanopy-platform/argoslower/internal/admission/sensor"
 	esctrl "github.com/kanopy-platform/argoslower/internal/controllers/eventsource"
 	ic "github.com/kanopy-platform/argoslower/pkg/ingress/v1/istio"
+	"github.com/kanopy-platform/argoslower/pkg/iplister"
+	ghc "github.com/kanopy-platform/argoslower/pkg/iplister/clients/github"
+	filedecoder "github.com/kanopy-platform/argoslower/pkg/iplister/decoder/file"
+	"github.com/kanopy-platform/argoslower/pkg/iplister/decoder/officeips"
+	"github.com/kanopy-platform/argoslower/pkg/iplister/reader/file"
+	"github.com/kanopy-platform/argoslower/pkg/iplister/reader/http"
 	"github.com/kanopy-platform/argoslower/pkg/namespace"
 	"github.com/kanopy-platform/argoslower/pkg/ratelimit"
 	"github.com/spf13/cobra"
@@ -83,11 +89,13 @@ func NewRootCommand() *cobra.Command {
 	cmd.PersistentFlags().Int32("default-requests-per-unit", 1, "Default requests per unit")
 	cmd.PersistentFlags().String("rate-limit-unit-annotation", "kanopy-events/rate-limit-unit", "Namespace annotation for rate limit unit")
 	cmd.PersistentFlags().String("requests-per-unit-annotation", "kanopy-events/requests-per-unit", "Namespace annotation for requests per unit")
+	cmd.PersistentFlags().Bool("enable-webhook-controller", false, "Enable webhook controller")
 	cmd.PersistentFlags().String("webhook-url", "webhooks.example.com", "Base url assocated with webhooks")
 	cmd.PersistentFlags().String("admin-namespace", "routing", "Ingress controller admin namespace")
 	cmd.PersistentFlags().String("gateway-namespace", "routing-rules", "Namespace of the ingress gateway")
 	cmd.PersistentFlags().String("gateway-name", "argo-webhook-gateway", "Name of the ingress gateway")
-	cmd.PersistentFlags().String("gateway-selector", "istio=ingress-gateway-public", "Label selector for the ingress gateway as a key=value comma delimited string")
+	cmd.PersistentFlags().String("gateway-selector", "istio=istio-ingressgateway-public", "Label selector for the ingress gateway as a key=value comma delimited string")
+	cmd.PersistentFlags().String("supported-hooks", "github=github", "comma separated list used for assigning IPGetters for various hook annotations")
 
 	k8sFlags.AddFlags(cmd.PersistentFlags())
 	// no need to check err, this only checks if variadic args != 0
@@ -135,6 +143,7 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 	}
 
 	ctx := signals.SetupSignalHandler()
+	log := klog.FromContext(ctx)
 
 	setupScheme()
 
@@ -190,81 +199,119 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 	drlr := viper.GetInt32("default-requests-per-unit")
 	rlc := ratelimit.NewRateLimitCalculatorOrDie(drlu, drlr)
 
-	//creater a filtered informer for resources with the event-source labal
-	selector := eventscommon.LabelEventSourceName
-	_, err = labels.Parse(selector)
-	if err != nil {
-		return err
-	}
+	if viper.GetBool("enable-webhook-controller") {
+		//creater a filtered informer for resources with the event-source labal
+		selector := eventscommon.LabelEventSourceName
+		_, err = labels.Parse(selector)
+		if err != nil {
+			return err
+		}
 
-	labelOptions := informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
-		opts.LabelSelector = selector
-	})
+		labelOptions := informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
+			opts.LabelSelector = selector
+		})
 
-	filteredk8sInformerFactory := informers.NewSharedInformerFactoryWithOptions(k8sClientSet, 1*time.Minute, labelOptions)
+		filteredk8sInformerFactory := informers.NewSharedInformerFactoryWithOptions(k8sClientSet, 1*time.Minute, labelOptions)
 
-	filteredServiceInfomer := filteredk8sInformerFactory.Core().V1().Services()
-	filteredServiceInfomer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(new interface{}) {},
-	})
+		filteredServiceInfomer := filteredk8sInformerFactory.Core().V1().Services()
+		filteredServiceInfomer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: func(new interface{}) {},
+		})
 
-	filteredk8sInformerFactory.Start(wait.NeverStop)
-	filteredk8sInformerFactory.WaitForCacheSync(wait.NeverStop)
+		filteredk8sInformerFactory.Start(wait.NeverStop)
+		filteredk8sInformerFactory.WaitForCacheSync(wait.NeverStop)
 
-	istioCS := istioclient.NewForConfigOrDie(cfg)
-	istioOptions := istioinformer.WithTweakListOptions(func(opts *metav1.ListOptions) {
-		opts.LabelSelector = selector
-	})
-	filteredIstioInformerFactory := istioinformer.NewSharedInformerFactoryWithOptions(istioCS, 1*time.Minute, istioOptions)
+		istioCS := istioclient.NewForConfigOrDie(cfg)
+		istioOptions := istioinformer.WithTweakListOptions(func(opts *metav1.ListOptions) {
+			opts.LabelSelector = selector
+		})
+		filteredIstioInformerFactory := istioinformer.NewSharedInformerFactoryWithOptions(istioCS, 1*time.Minute, istioOptions)
 
-	filteredVirtualServiceInfomer := filteredIstioInformerFactory.Networking().V1beta1().VirtualServices().Informer()
-	filteredVirtualServiceInfomer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(new interface{}) {},
-	})
+		filteredVirtualServiceInfomer := filteredIstioInformerFactory.Networking().V1beta1().VirtualServices().Informer()
+		filteredVirtualServiceInfomer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: func(new interface{}) {},
+		})
 
-	filteredAuthorizationPolicyInformer := filteredIstioInformerFactory.Security().V1beta1().AuthorizationPolicies().Informer()
-	filteredAuthorizationPolicyInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(new interface{}) {},
-	})
+		filteredAuthorizationPolicyInformer := filteredIstioInformerFactory.Security().V1beta1().AuthorizationPolicies().Informer()
+		filteredAuthorizationPolicyInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: func(new interface{}) {},
+		})
 
-	filteredIstioInformerFactory.Start(wait.NeverStop)
-	filteredIstioInformerFactory.WaitForCacheSync(wait.NeverStop)
+		filteredIstioInformerFactory.Start(wait.NeverStop)
+		filteredIstioInformerFactory.WaitForCacheSync(wait.NeverStop)
 
-	sadd.NewHandler(nsInformer, rlc).SetupWithManager(mgr)
-	esadd.NewHandler(nsInformer).SetupWithManager(mgr)
+		sadd.NewHandler(nsInformer, rlc).SetupWithManager(mgr)
+		esadd.NewHandler(nsInformer).SetupWithManager(mgr)
 
-	gws := stringToMap(viper.GetString("gateway-selector"), ",", "=")
-	if len(gws) == 0 {
-		return fmt.Errorf("Invalid gateway-selector: %s", viper.GetString("gateway-selector"))
-	}
+		gws := stringToMap(viper.GetString("gateway-selector"), ",", "=")
+		if len(gws) == 0 {
+			return fmt.Errorf("Invalid gateway-selector: %s", viper.GetString("gateway-selector"))
+		}
 
-	ingressClient := ic.NewClient(istioCS, gws)
-	escc := esctrl.NewEventSourceIngressControllerConfig()
-	escc.Gateway = types.NamespacedName{
-		Namespace: viper.GetString("gateway-namespace"),
-		Name:      viper.GetString("gateway-name"),
-	}
+		ingressClient := ic.NewClient(istioCS, gws)
+		escc := esctrl.NewEventSourceIngressControllerConfig()
+		escc.Gateway = types.NamespacedName{
+			Namespace: viper.GetString("gateway-namespace"),
+			Name:      viper.GetString("gateway-name"),
+		}
 
-	escc.BaseURL = viper.GetString("webhook-url")
-	escc.AdminNamespace = viper.GetString("admin-namespace")
+		escc.BaseURL = viper.GetString("webhook-url")
+		escc.AdminNamespace = viper.GetString("admin-namespace")
 
-	esController := esctrl.NewEventSourceIngressController(esi.Lister(), filteredServiceInfomer.Lister(), escc, ingressClient)
-	esi.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(new interface{}) {}})
+		esController := esctrl.NewEventSourceIngressController(esi.Lister(), filteredServiceInfomer.Lister(), escc, ingressClient)
 
-	esinformerFactory.Start(wait.NeverStop)
-	esinformerFactory.WaitForCacheSync(wait.NeverStop)
+		hookConfig := stringToMap(viper.GetString("supported-hooks"), ",", "=")
+		githubGetter := ghc.New()
 
-	ctrl, err := controller.New("argoslower-eventsource-controller", mgr, controller.Options{
-		Reconciler: esController,
-	})
+		for hook, provider := range hookConfig {
+			if hook == "" {
+				continue
+			}
+			switch provider {
+			case "github":
+				esController.SetIPGetter(hook, githubGetter)
+			case "file":
+				f := file.New(viper.GetString("IPFILE"))
+				ips := viper.GetString("IPFILE_SOURCES")
+				d := filedecoder.New(strings.Split(ips, ",")...)
+				g := iplister.New(f, d)
+				esController.SetIPGetter(hook, g)
 
-	if err != nil {
-		return err
-	}
+			case "officeips":
+				h := http.New(viper.GetString("OFFICEIP_URL"), http.WithBasicAuth(viper.GetString("OFFICEIP_USER"), viper.GetString("OFFICEIP_PASSWORD")))
+				d := officeips.New()
+				g := iplister.New(h, d)
+				esController.SetIPGetter(hook, g)
+			case "any":
+				log.V(3).Info(fmt.Sprintf("The any provider is only designed for debug and testing use. Configuring for hook type: %s", hook))
+				g := &iplister.AnyGetter{}
+				esController.SetIPGetter(hook, g)
 
-	if e := ctrl.Watch(&source.Informer{Informer: esi.Informer()}, &handler.EnqueueRequestForObject{}); e != nil {
-		return e
+			default:
+				err := fmt.Errorf("Unkonwn webhook provider type %s", provider)
+				log.Error(err, err.Error())
+				return err
+			}
+		}
+		esController.SetIPGetter("github", githubGetter)
+
+		esi.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: func(new interface{}) {}})
+
+		esinformerFactory.Start(wait.NeverStop)
+		esinformerFactory.WaitForCacheSync(wait.NeverStop)
+
+		ctrl, err := controller.New("argoslower-eventsource-controller", mgr, controller.Options{
+			Reconciler: esController,
+		})
+
+		if err != nil {
+			return err
+		}
+
+		if e := ctrl.Watch(&source.Informer{Informer: esi.Informer()}, &handler.EnqueueRequestForObject{}); e != nil {
+			return e
+		}
 	}
 
 	return mgr.Start(ctx)
@@ -274,10 +321,10 @@ func stringToMap(in, delim, split string) map[string]string {
 	out := map[string]string{}
 	for _, v := range strings.Split(in, delim) {
 		mark := strings.Index(v, split)
-		if mark < 0 {
+		if mark < 0 || mark+1 >= len(v) {
 			continue
 		}
-		out[v[:mark]] = v[mark:]
+		out[v[:mark]] = v[mark+1:]
 	}
 	return out
 }
