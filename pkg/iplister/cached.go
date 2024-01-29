@@ -24,7 +24,7 @@ func NewCachedIPLister(reader Reader, decoder Decoder) *CachedIPLister {
 		syncInterval: 5 * time.Minute,
 		lock:         &sync.RWMutex{},
 	}
-	out.setIPs()
+	_ = out.setIPs()
 	return out
 }
 
@@ -51,7 +51,7 @@ func (i *CachedIPLister) GetIPs() ([]string, error) {
 	copy(out, ipl)
 
 	if bgSync {
-		go i.setIPs()
+		go i.setIPs() //nolint:errcheck
 	}
 	return out, err
 }
@@ -63,7 +63,7 @@ func (i *CachedIPLister) needSync() (bool, bool) {
 		return true, false
 	}
 
-	if time.Now().Sub(i.lastSync) >= i.syncInterval {
+	if time.Since(i.lastSync) >= i.syncInterval {
 		return false, true
 	}
 

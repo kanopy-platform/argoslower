@@ -162,29 +162,24 @@ func TestCachedIPListerGetIPs(t *testing.T) {
 	// Test 5min background sync for stale ip lists
 	ipl.lock.Lock()
 	ipl.lastSync = ipl.lastSync.Add(-5 * time.Minute)
+	rcount := mr.count
+	dcount := md.count
 	ipl.lock.Unlock()
 
 	ips, err = ipl.GetIPs()
 	assert.NoError(t, err)
+	assert.True(t, !contains(ips, "3.4.5.6/32"))
 
-	ipl.lock.Lock()
-	index := md.count
-	ipl.lock.Unlock()
-
-	for !contains(ips, "2.3.4.5/32") {
+	index := 0
+	for ; index <= 1000; index++ {
 		ips, err = ipl.GetIPs()
 		assert.NoError(t, err)
-		index += 1
-
-		if index >= 1000 {
-			break
-		}
 	}
 
 	assert.True(t, contains(ips, "2.3.4.5/32"))
 	ipl.lock.RLock()
-	assert.True(t, mr.count <= index)
-	assert.True(t, md.count <= index)
+	assert.True(t, mr.count < (index+rcount))
+	assert.True(t, md.count < (index+dcount))
 	ipl.lock.RUnlock()
 
 	// Test failed bg sync retains stale ip list
@@ -192,6 +187,8 @@ func TestCachedIPListerGetIPs(t *testing.T) {
 	md.ret = []string{"3.4.5.6/32"}
 	mr.err = fmt.Errorf("slow down")
 	ipl.lastSync = ipl.lastSync.Add(-5 * time.Minute)
+	rcount = mr.count
+	dcount = md.count
 	ipl.lock.Unlock()
 
 	index = 0
@@ -203,8 +200,8 @@ func TestCachedIPListerGetIPs(t *testing.T) {
 
 	assert.True(t, !contains(ips, "3.4.5.6/32"))
 	ipl.lock.RLock()
-	assert.True(t, mr.count <= index)
-	assert.True(t, md.count <= index)
+	assert.True(t, index >= 100 && mr.count <= (index+rcount), fmt.Sprint(index+rcount), fmt.Sprint(mr.count))
+	assert.True(t, index >= 100 && md.count <= (index+dcount), fmt.Sprint(index+dcount), fmt.Sprint(md.count))
 	ipl.lock.RUnlock()
 
 	// Test bg sync recovers from intermitant error
@@ -213,18 +210,21 @@ func TestCachedIPListerGetIPs(t *testing.T) {
 	ipl.lastSync = ipl.lastSync.Add(-5 * time.Minute)
 	ipl.lock.Unlock()
 
-	index = 0
+	ips, err = ipl.GetIPs()
+	assert.NoError(t, err)
+	assert.True(t, !contains(ips, "3.4.5.6/32"))
 
-	for !contains(ips, "3.4.5.6/32") {
-		ips, err = ipl.GetIPs()
-		assert.NoError(t, err)
-		index += 1
-
-		if index >= 1000 {
+	now := time.Now()
+	sn, bg := ipl.needSync()
+	for sn || bg {
+		sn, bg = ipl.needSync()
+		if time.Since(now) >= (5 * time.Second) {
 			break
 		}
 	}
 
+	ips, err = ipl.GetIPs()
+	assert.NoError(t, err)
 	assert.True(t, contains(ips, "3.4.5.6/32"))
 }
 
