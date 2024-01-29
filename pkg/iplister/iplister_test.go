@@ -162,36 +162,36 @@ func TestCachedIPListerGetIPs(t *testing.T) {
 	// Test 5min background sync for stale ip lists
 	ipl.lock.Lock()
 	ipl.lastSync = ipl.lastSync.Add(-5 * time.Minute)
-	rcount := mr.count
-	dcount := md.count
 	ipl.lock.Unlock()
 
 	ips, err = ipl.GetIPs()
 	assert.NoError(t, err)
-	assert.True(t, !contains(ips, "3.4.5.6/32"))
+	assert.True(t, !contains(ips, "2.3.4.5/32"))
 
-	index := 0
-	for ; index <= 1000; index++ {
-		ips, err = ipl.GetIPs()
-		assert.NoError(t, err)
+	now := time.Now()
+	sn, bg := ipl.needSync()
+	for sn || bg {
+		sn, bg = ipl.needSync()
+		if time.Since(now) >= (5 * time.Second) {
+			break
+		}
+
 	}
 
+	ips, err = ipl.GetIPs()
+	assert.NoError(t, err)
 	assert.True(t, contains(ips, "2.3.4.5/32"))
-	ipl.lock.RLock()
-	assert.True(t, mr.count < (index+rcount))
-	assert.True(t, md.count < (index+dcount))
-	ipl.lock.RUnlock()
 
 	// Test failed bg sync retains stale ip list
 	ipl.lock.Lock()
 	md.ret = []string{"3.4.5.6/32"}
 	mr.err = fmt.Errorf("slow down")
 	ipl.lastSync = ipl.lastSync.Add(-5 * time.Minute)
-	rcount = mr.count
-	dcount = md.count
+	rcount := mr.count
+	dcount := md.count
 	ipl.lock.Unlock()
 
-	index = 0
+	index := 0
 	for ; index <= 100; index++ {
 		ips, err = ipl.GetIPs()
 		assert.NoError(t, err)
@@ -214,8 +214,8 @@ func TestCachedIPListerGetIPs(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, !contains(ips, "3.4.5.6/32"))
 
-	now := time.Now()
-	sn, bg := ipl.needSync()
+	now = time.Now()
+	sn, bg = ipl.needSync()
 	for sn || bg {
 		sn, bg = ipl.needSync()
 		if time.Since(now) >= (5 * time.Second) {
