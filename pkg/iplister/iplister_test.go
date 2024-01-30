@@ -183,7 +183,7 @@ func TestCachedIPListerGetIPs(t *testing.T) {
 	for ; index <= 100; index++ {
 		ips, err = ipl.GetIPs()
 		assert.NoError(t, err)
-		assert.True(t, !contains(ips, "3.4.5.6/32"))
+		assert.NotContains(t, ips, "3.4.5.6/32")
 	}
 
 	ipl.lock.RLock()
@@ -191,7 +191,7 @@ func TestCachedIPListerGetIPs(t *testing.T) {
 	assert.True(t, index >= 100 && md.count <= (index+dcount), fmt.Sprint(index+dcount), fmt.Sprint(md.count))
 	ipl.lock.RUnlock()
 
-	// Test bg sync recovers from intermitant error
+	// Test sync recovers from intermittent error
 	ipl.lock.Lock()
 	mr.err = nil
 	ipl.lastSync = ipl.lastSync.Add(-5 * time.Minute)
@@ -199,7 +199,7 @@ func TestCachedIPListerGetIPs(t *testing.T) {
 
 	ips, err = ipl.GetIPs()
 	assert.NoError(t, err)
-	assert.True(t, contains(ips, "3.4.5.6/32"))
+	assert.Contains(t, ips, "3.4.5.6/32"))
 
 }
 
@@ -236,11 +236,3 @@ func BenchmarkCachedIPLister(b *testing.B) {
 	b.ReportMetric(ec, "Errors")
 }
 
-func contains(in []string, val string) bool {
-	for _, v := range in {
-		if v == val {
-			return true
-		}
-	}
-	return false
-}
