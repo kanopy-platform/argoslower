@@ -165,7 +165,7 @@ func TestCachedIPListerGetIPs(t *testing.T) {
 
 	ips, err = ipl.GetIPs()
 	assert.NoError(t, err)
-	assert.True(t, contains(ips, "2.3.4.5/32"))
+	assert.Contains(t, ips, "2.3.4.5/32")
 
 	// Test failed bg sync retains stale ip list
 	ipl.lock.Lock()
