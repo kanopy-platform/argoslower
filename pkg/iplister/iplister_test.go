@@ -178,7 +178,7 @@ func TestCachedIPListerGetIPs(t *testing.T) {
 
 	ips, err = ipl.GetIPs()
 	assert.Error(t, err)
-	assert.True(t, !contains(ips, "3.4.5.6/32"))
+	assert.NotContains(t, ips, "3.4.5.6/32")
 	index := 0
 	for ; index <= 100; index++ {
 		ips, err = ipl.GetIPs()
@@ -199,7 +199,7 @@ func TestCachedIPListerGetIPs(t *testing.T) {
 
 	ips, err = ipl.GetIPs()
 	assert.NoError(t, err)
-	assert.Contains(t, ips, "3.4.5.6/32"))
+	assert.Contains(t, ips, "3.4.5.6/32")
 
 }
 
@@ -235,4 +235,3 @@ func BenchmarkCachedIPLister(b *testing.B) {
 
 	b.ReportMetric(ec, "Errors")
 }
-
