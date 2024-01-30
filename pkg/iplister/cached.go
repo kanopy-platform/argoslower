@@ -1,26 +1,22 @@
 package iplister
 
 import (
-	"context"
+	"fmt"
 	"sync"
 	"time"
 )
 
 type CachedIPLister struct {
-	reader       Reader
-	decoder      Decoder
-	timeout      time.Duration
+	lister       *IPLister
 	lastSync     time.Time
 	syncInterval time.Duration
 	lock         *sync.RWMutex
 	ips          []string
 }
 
-func NewCachedIPLister(reader Reader, decoder Decoder) *CachedIPLister {
+func NewCachedIPLister(lister *IPLister) *CachedIPLister {
 	out := &CachedIPLister{
-		reader:       reader,
-		decoder:      decoder,
-		timeout:      defaultTimeout,
+		lister:       lister,
 		syncInterval: 5 * time.Minute,
 		lock:         &sync.RWMutex{},
 	}
@@ -28,51 +24,36 @@ func NewCachedIPLister(reader Reader, decoder Decoder) *CachedIPLister {
 	return out
 }
 
-func (i *CachedIPLister) SetTimeout(t time.Duration) {
-	if i == nil {
-		return
-	}
-	i.lock.Lock()
-	i.timeout = t
-	i.lock.Unlock()
-}
-
 func (i *CachedIPLister) GetIPs() ([]string, error) {
 	var out []string
 	var err error
-	syncNow, bgSync := i.needSync()
+	if i.lister == nil {
+		return out, fmt.Errorf("No lister configured")
+	}
+	syncNow := i.needSync()
 
 	if syncNow {
 		err = i.setIPs()
 	}
 
-	ipl := i.getIPs()
-	out = make([]string, len(ipl))
-	copy(out, ipl)
-
-	if bgSync {
-		go i.setIPs() //nolint:errcheck
-	}
+	out = i.getIPs()
 	return out, err
 }
 
-func (i *CachedIPLister) needSync() (bool, bool) {
+func (i *CachedIPLister) needSync() bool {
 	i.lock.Lock()
 	defer i.lock.Unlock()
-	if i.lastSync.IsZero() {
-		return true, false
+	if i.lastSync.IsZero() || time.Since(i.lastSync) >= i.syncInterval {
+		return true
 	}
-
-	if time.Since(i.lastSync) >= i.syncInterval {
-		return false, true
-	}
-
-	return false, false
+	return false
 }
 func (i *CachedIPLister) getIPs() []string {
 	i.lock.RLock()
 	defer i.lock.RUnlock()
-	return i.ips
+	out := make([]string, len(i.ips))
+	copy(out, i.ips)
+	return out
 }
 
 func (i *CachedIPLister) setIPs() error {
@@ -80,21 +61,8 @@ func (i *CachedIPLister) setIPs() error {
 	defer i.lock.Unlock()
 	// always update the sync time to keep from overwhelming the reader target
 	i.lastSync = time.Now()
-	ctx, cancel := context.WithTimeout(context.Background(), i.timeout)
-	defer cancel()
-
-	reader, err := i.reader.Data(ctx)
+	ipList, err := i.lister.GetIPs()
 	if err != nil {
-		return err
-	}
-	defer reader.Close()
-
-	ipList, err := i.decoder.Decode(reader)
-	if err != nil {
-		return err
-	}
-
-	if err := ValidateCIDRs(ipList); err != nil {
 		return err
 	}
 

@@ -110,11 +110,9 @@ func TestValidateCIDRs(t *testing.T) {
 func TestNewCachedIPLister(t *testing.T) {
 	t.Parallel()
 
-	ipl := NewCachedIPLister(&mockReader{}, &mockDecoder{})
-	assert.Equal(t, defaultTimeout, ipl.timeout)
-
-	ipl.SetTimeout(500 * time.Minute)
-	assert.Equal(t, (500 * time.Minute), ipl.timeout)
+	il := New(&mockReader{}, &mockDecoder{}, WithTimeout(defaultTimeout))
+	ipl := NewCachedIPLister(il)
+	assert.Equal(t, defaultTimeout, ipl.lister.timeout)
 }
 
 func TestCachedIPListerGetIPs(t *testing.T) {
@@ -131,7 +129,8 @@ func TestCachedIPListerGetIPs(t *testing.T) {
 		ret: decoderData,
 		err: nil,
 	}
-	ipl := NewCachedIPLister(mr, md)
+	il := New(mr, md)
+	ipl := NewCachedIPLister(il)
 
 	// Test ip list population at creation time
 	ipl.lock.Lock()
@@ -166,20 +165,6 @@ func TestCachedIPListerGetIPs(t *testing.T) {
 
 	ips, err = ipl.GetIPs()
 	assert.NoError(t, err)
-	assert.True(t, !contains(ips, "2.3.4.5/32"))
-
-	now := time.Now()
-	sn, bg := ipl.needSync()
-	for sn || bg {
-		sn, bg = ipl.needSync()
-		if time.Since(now) >= (5 * time.Second) {
-			break
-		}
-
-	}
-
-	ips, err = ipl.GetIPs()
-	assert.NoError(t, err)
 	assert.True(t, contains(ips, "2.3.4.5/32"))
 
 	// Test failed bg sync retains stale ip list
@@ -191,6 +176,8 @@ func TestCachedIPListerGetIPs(t *testing.T) {
 	dcount := md.count
 	ipl.lock.Unlock()
 
+	ips, err = ipl.GetIPs()
+	assert.Error(t, err)
 	index := 0
 	for ; index <= 100; index++ {
 		ips, err = ipl.GetIPs()
@@ -198,7 +185,6 @@ func TestCachedIPListerGetIPs(t *testing.T) {
 		assert.True(t, !contains(ips, "3.4.5.6/32"))
 	}
 
-	assert.True(t, !contains(ips, "3.4.5.6/32"))
 	ipl.lock.RLock()
 	assert.True(t, index >= 100 && mr.count <= (index+rcount), fmt.Sprint(index+rcount), fmt.Sprint(mr.count))
 	assert.True(t, index >= 100 && md.count <= (index+dcount), fmt.Sprint(index+dcount), fmt.Sprint(md.count))
@@ -212,20 +198,41 @@ func TestCachedIPListerGetIPs(t *testing.T) {
 
 	ips, err = ipl.GetIPs()
 	assert.NoError(t, err)
-	assert.True(t, !contains(ips, "3.4.5.6/32"))
+	assert.True(t, contains(ips, "3.4.5.6/32"))
 
-	now = time.Now()
-	sn, bg = ipl.needSync()
-	for sn || bg {
-		sn, bg = ipl.needSync()
-		if time.Since(now) >= (5 * time.Second) {
-			break
+}
+
+func BenchmarkCachedIPLister(b *testing.B) {
+	fakeData := "1.2.3.4/32"
+	decoderData := []string{fakeData}
+
+	mr := &mockReader{
+		ret: fakeData,
+		err: nil,
+	}
+	md := &mockDecoder{
+		ret: decoderData,
+		err: nil,
+	}
+	il := New(mr, md)
+	ipl := NewCachedIPLister(il)
+
+	ec := float64(0)
+	for i := 0; i < b.N; i++ {
+		_, err := ipl.GetIPs()
+		if err != nil {
+			ec++
 		}
+
+		if i%10 == 0 {
+			ipl.lock.Lock()
+			ipl.lastSync = ipl.lastSync.Add(-5 * time.Minute)
+			ipl.lock.Unlock()
+		}
+
 	}
 
-	ips, err = ipl.GetIPs()
-	assert.NoError(t, err)
-	assert.True(t, contains(ips, "3.4.5.6/32"))
+	b.ReportMetric(ec, "Errors")
 }
 
 func contains(in []string, val string) bool {
