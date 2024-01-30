@@ -23,6 +23,7 @@ test: tidy ## Run tests in local environment
 	golangci-lint run --timeout=5m $(PKG)
 	go test -cover -short -run=$(RUN) $(PKG)
 	go test -count 500 -race -short ./pkg/iplister/
+	go test -bench -run=$(RUN) ./pkg/iplister/
 
 .PHONY: integration
 integration: tidy envtest ## Run integration tests with envtest
