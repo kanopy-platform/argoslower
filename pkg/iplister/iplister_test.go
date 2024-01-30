@@ -178,6 +178,7 @@ func TestCachedIPListerGetIPs(t *testing.T) {
 
 	ips, err = ipl.GetIPs()
 	assert.Error(t, err)
+	assert.True(t, !contains(ips, "3.4.5.6/32"))
 	index := 0
 	for ; index <= 100; index++ {
 		ips, err = ipl.GetIPs()
