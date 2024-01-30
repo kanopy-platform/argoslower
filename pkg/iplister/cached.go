@@ -43,10 +43,7 @@ func (i *CachedIPLister) GetIPs() ([]string, error) {
 func (i *CachedIPLister) needSync() bool {
 	i.lock.Lock()
 	defer i.lock.Unlock()
-	if i.lastSync.IsZero() || time.Since(i.lastSync) >= i.syncInterval {
-		return true
-	}
-	return false
+	return i.lastSync.IsZero() || time.Since(i.lastSync) >= i.syncInterval
 }
 func (i *CachedIPLister) getIPs() []string {
 	i.lock.RLock()
