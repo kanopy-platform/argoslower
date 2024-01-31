@@ -1,0 +1,19 @@
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  labels:
+    v1beta1.kanopy-platform.github.io/istio-cert-controller-inject-simple-credential-name: "true"
+  name: argo-webhook-gateway
+  namespace: routing-rules
+spec:
+  selector:
+    istio: istio-ingressgateway-public
+  servers:
+  - hosts:
+    - routing-rules/webhooks.example.com
+    port:
+      name: https
+      number: 443
+      protocol: HTTPS
+    tls:
+      mode: SIMPLE

@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: EventSource
+metadata:
+  name: argo-tester-officeips
+  namespace: devops
+  annotations:
+    v1alpha1.argoslower.kanopy-platform/known-source: "officeips"
+spec:
+  eventBusName: demo-days
+  service:
+    ports:
+    - port: 80
+      targetPort: 8080
+  webhook:
+    example:
+      endpoint: /example
+      method: POST
+      port: "8080"
