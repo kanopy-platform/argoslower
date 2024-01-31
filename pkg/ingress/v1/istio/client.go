@@ -328,7 +328,6 @@ func (ic *IstioConfig) ConfigureAP(adminns, url string, nsn types.NamespacedName
 						fmt.Sprintf("%s:*", url),
 					},
 					Paths: paths,
-					Ports: []string{"443"},
 				},
 			},
 		},
