@@ -262,6 +262,7 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 		hookConfig := stringToMap(viper.GetString("supported-hooks"), ",", "=")
 
 		githubGetter := ghc.New()
+		ghcl := iplister.NewCachedIPLister(githubGetter)
 
 		for hook, provider := range hookConfig {
 			if hook == "" {
@@ -269,19 +270,21 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 			}
 			switch provider {
 			case "github":
-				esController.SetIPGetter(hook, githubGetter)
+				esController.SetIPGetter(hook, ghcl)
 			case "file":
 				f := file.New(viper.GetString("IPFILE"))
 				ips := viper.GetString("IPFILE_SOURCES")
 				d := filedecoder.New(strings.Split(ips, ",")...)
 				g := iplister.New(f, d)
-				esController.SetIPGetter(hook, g)
+				c := iplister.NewCachedIPLister(g)
+				esController.SetIPGetter(hook, c)
 
 			case "officeips":
 				h := http.New(viper.GetString("OFFICEIP_URL"), http.WithBasicAuth(viper.GetString("OFFICEIP_USER"), viper.GetString("OFFICEIP_PASSWORD")))
 				d := officeips.New()
 				g := iplister.New(h, d)
-				esController.SetIPGetter(hook, g)
+				c := iplister.NewCachedIPLister(g)
+				esController.SetIPGetter(hook, c)
 			case "any":
 				klog.Log.V(1).Info(fmt.Sprintf("The any provider is only designed for debug and testing use. Configuring for hook type: %s", hook))
 				g := &iplister.AnyGetter{}
