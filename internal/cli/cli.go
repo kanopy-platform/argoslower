@@ -273,8 +273,7 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 				esController.SetIPGetter(hook, ghcl)
 			case "file":
 				f := file.New(viper.GetString("IPFILE"))
-				ips := viper.GetString("IPFILE_SOURCES")
-				d := filedecoder.New(strings.Split(ips, ",")...)
+				d := filedecoder.New(hook)
 				g := iplister.New(f, d)
 				c := iplister.NewCachedIPLister(g)
 				esController.SetIPGetter(hook, c)
