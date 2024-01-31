@@ -95,7 +95,7 @@ func NewRootCommand() *cobra.Command {
 	cmd.PersistentFlags().String("gateway-namespace", "routing-rules", "Namespace of the ingress gateway")
 	cmd.PersistentFlags().String("gateway-name", "argo-webhook-gateway", "Name of the ingress gateway")
 	cmd.PersistentFlags().String("gateway-selector", "istio=istio-ingressgateway-public", "Label selector for the ingress gateway as a key=value comma delimited string")
-	cmd.PersistentFlags().String("supported-hooks", "github=github", "comma separated list used for assigning IPGetters for various hook annotations")
+	cmd.PersistentFlags().String("supported-hooks", "github=github", "comma separated key=value list used for assigning IPGetters for various hook annotations")
 
 	k8sFlags.AddFlags(cmd.PersistentFlags())
 	// no need to check err, this only checks if variadic args != 0
@@ -143,7 +143,6 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 	}
 
 	ctx := signals.SetupSignalHandler()
-	log := klog.FromContext(ctx)
 
 	setupScheme()
 
@@ -261,6 +260,7 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 		esController := esctrl.NewEventSourceIngressController(esi.Lister(), filteredServiceInfomer.Lister(), escc, ingressClient)
 
 		hookConfig := stringToMap(viper.GetString("supported-hooks"), ",", "=")
+
 		githubGetter := ghc.New()
 
 		for hook, provider := range hookConfig {
@@ -283,17 +283,16 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 				g := iplister.New(h, d)
 				esController.SetIPGetter(hook, g)
 			case "any":
-				log.V(3).Info(fmt.Sprintf("The any provider is only designed for debug and testing use. Configuring for hook type: %s", hook))
+				klog.Log.V(1).Info(fmt.Sprintf("The any provider is only designed for debug and testing use. Configuring for hook type: %s", hook))
 				g := &iplister.AnyGetter{}
 				esController.SetIPGetter(hook, g)
 
 			default:
 				err := fmt.Errorf("Unkonwn webhook provider type %s", provider)
-				log.Error(err, err.Error())
+				klog.Log.Error(err, err.Error())
 				return err
 			}
 		}
-		esController.SetIPGetter("github", githubGetter)
 
 		esi.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc: func(new interface{}) {}})

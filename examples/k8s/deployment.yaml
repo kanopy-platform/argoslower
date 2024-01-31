@@ -40,6 +40,11 @@ spec:
           image: registry.example.com/argoslower:latest
           args:
             - "--log-level=debug"
+            - "--enable-webhook-controller"
+            - "--supported-hooks=github=any,officeips=any,jira=any"
+          env:
+            - name: "APP_supported_hooks"
+              value: "github=any,officeips=any"
           imagePullPolicy: Always
           resources:
             requests:

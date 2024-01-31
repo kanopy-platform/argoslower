@@ -127,13 +127,22 @@ func (i *IstioClient) upsertFromConfig(config *IstioConfig) (*isnetv1beta1.Virtu
 
 func (i *IstioClient) Configure(ctx context.Context, config *v1.EventSourceIngressConfig) ([]types.NamespacedName, error) {
 	log := log.FromContext(ctx)
+	out := []types.NamespacedName{}
+
+	if config == nil {
+		return out, perrs.NewUnretryableError(fmt.Errorf("Nil config"))
+	}
 
 	cidrs, err := config.Ipg.GetIPs()
-
-	out := []types.NamespacedName{}
 	if err != nil {
-		log.V(5).Info("Ip Getter yielded no ips")
-		return out, perrs.NewUnretryableError(err)
+		log.V(5).Info(fmt.Sprintf("Failed to source IPs for %s: %s", config.Es.String(), err.Error()))
+		return out, perrs.NewRetryableError(err)
+	}
+
+	if len(cidrs) == 0 {
+		e := fmt.Errorf("Failed to source IPs for %s", config.Es.String())
+		log.V(1).Info(e.Error())
+		return out, perrs.NewRetryableError(e)
 	}
 
 	c := NewIstioConfig()
@@ -319,6 +328,7 @@ func (ic *IstioConfig) ConfigureAP(adminns, url string, nsn types.NamespacedName
 						fmt.Sprintf("%s:*", url),
 					},
 					Paths: paths,
+					Ports: []string{"443"},
 				},
 			},
 		},
