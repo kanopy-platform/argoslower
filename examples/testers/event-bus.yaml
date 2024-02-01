@@ -1,0 +1,13 @@
+apiVersion: argoproj.io/v1alpha1
+kind: EventBus
+metadata:
+  name: tester
+  namespace: devops
+spec:
+  jetstream:
+    replicas: 3
+    startArgs:
+    - -D
+    streamConfig: |
+      maxAge: 168h
+    version: 2.9.16

@@ -1,0 +1,10 @@
+kind: ConfigMap
+metadata:
+  name: argoslower-iplists
+  namespace: argo
+apiVersion: v1
+data:
+  iplist.yaml: |
+    iplists:
+      jira:
+      - 192.168.0.0/16

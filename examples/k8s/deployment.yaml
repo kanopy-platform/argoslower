@@ -40,6 +40,29 @@ spec:
           image: registry.example.com/argoslower:latest
           args:
             - "--log-level=debug"
+            - "--enable-webhook-controller"
+            - "--supported-hooks=github=any,officeips=any,jira=any"
+#            - "--supported-hooks=github=any,officeips=officeips,jira=file"
+          env:
+            - name: "APP_IPFILE"
+              value: "/etc/argoslower/iplist.yaml"
+            - name: "APP_IPFILE_SOURCES"
+              value: "jira"
+#            - name: "APP_OFFICEIP_URL"
+#              valueFrom:
+#                secretKeyRef:
+#                  name: office-ips-keys
+#                  key: address
+#            - name: "APP_OFFICEIP_USER"
+#              valueFrom:
+#                secretKeyRef:
+#                  name: office-ips-keys
+#                  key: user
+#            - name: "APP_OFFICEIP_PASSWORD"
+#              valueFrom:
+#                secretKeyRef:
+#                  name: office-ips-keys
+#                  key: password
           imagePullPolicy: Always
           resources:
             requests:
@@ -49,6 +72,9 @@ spec:
           volumeMounts:
             - name: webhook-certs
               mountPath: /etc/webhook/certs
+              readOnly: true
+            - name: iplists
+              mountPath: /etc/argoslower/
               readOnly: true
           livenessProbe:
             httpGet:
@@ -74,8 +100,14 @@ spec:
         - name: webhook-certs
           secret:
             secretName: argoslower
+        - name: iplists
+          configMap:
+            name: argoslower-iplists
+            items:
+            - key: iplist.yaml
+              path: iplist.yaml
 
----   
+---
 apiVersion: v1
 kind: Service
 metadata:

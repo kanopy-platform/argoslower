@@ -8,18 +8,31 @@ rules:
   - ""
   resources:
   - namespaces
+  - services
   verbs:
   - get
   - list
   - watch
 - apiGroups:
   - "argoproj.io"
-  operations:
+  verbs:
   - get
   - list
   - watch
   resources:
   - eventsources
+- apiGroups:
+  - networking.istio.io
+  verbs:
+  - "*"
+  resources:
+  - virtualservices
+- apiGroups:
+  - security.istio.io
+  verbs:
+  - "*"
+  resources:
+  - authorizationpolicies
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
