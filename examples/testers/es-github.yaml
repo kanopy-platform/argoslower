@@ -6,7 +6,7 @@ metadata:
   annotations:
     v1alpha1.argoslower.kanopy-platform/known-source: "github"
 spec:
-  eventBusName: demo-days
+  eventBusName: tester
   service:
     ports:
     - port: 80
