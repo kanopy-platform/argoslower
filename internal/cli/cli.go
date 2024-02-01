@@ -20,6 +20,7 @@ import (
 	"github.com/kanopy-platform/argoslower/pkg/iplister/reader/http"
 	"github.com/kanopy-platform/argoslower/pkg/namespace"
 	"github.com/kanopy-platform/argoslower/pkg/ratelimit"
+	stringutils "github.com/kanopy-platform/argoslower/pkg/stringutils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"k8s.io/apimachinery/pkg/labels"
@@ -242,7 +243,7 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 		sadd.NewHandler(nsInformer, rlc).SetupWithManager(mgr)
 		esadd.NewHandler(nsInformer).SetupWithManager(mgr)
 
-		gws := stringToMap(viper.GetString("gateway-selector"), ",", "=")
+		gws := stringutils.StringToMap(viper.GetString("gateway-selector"), ",", "=")
 		if len(gws) == 0 {
 			return fmt.Errorf("Invalid gateway-selector: %s", viper.GetString("gateway-selector"))
 		}
@@ -259,41 +260,10 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 
 		esController := esctrl.NewEventSourceIngressController(esi.Lister(), filteredServiceInfomer.Lister(), escc, ingressClient)
 
-		hookConfig := stringToMap(viper.GetString("supported-hooks"), ",", "=")
-
-		githubGetter := ghc.New()
-		ghcl := iplister.NewCachedIPLister(githubGetter)
-
-		for hook, provider := range hookConfig {
-			if hook == "" {
-				continue
-			}
-			switch provider {
-			case "github":
-				esController.SetIPGetter(hook, ghcl)
-			case "file":
-				f := file.New(viper.GetString("IPFILE"))
-				d := filedecoder.New(hook)
-				g := iplister.New(f, d)
-				c := iplister.NewCachedIPLister(g)
-				esController.SetIPGetter(hook, c)
-
-			case "officeips":
-				h := http.New(viper.GetString("OFFICEIP_URL"), http.WithBasicAuth(viper.GetString("OFFICEIP_USER"), viper.GetString("OFFICEIP_PASSWORD")))
-				d := officeips.New()
-				g := iplister.New(h, d)
-				c := iplister.NewCachedIPLister(g)
-				esController.SetIPGetter(hook, c)
-			case "any":
-				klog.Log.V(1).Info(fmt.Sprintf("The any provider is only designed for debug and testing use. Configuring for hook type: %s", hook))
-				g := &iplister.AnyGetter{}
-				esController.SetIPGetter(hook, g)
-
-			default:
-				err := fmt.Errorf("Unkonwn webhook provider type %s", provider)
-				klog.Log.Error(err, err.Error())
-				return err
-			}
+		hookConfig := stringutils.StringToMap(viper.GetString("supported-hooks"), ",", "=")
+		err = configureHooks(esController, hookConfig)
+		if err != nil {
+			return err
 		}
 
 		esi.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -318,14 +288,43 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 	return mgr.Start(ctx)
 }
 
-func stringToMap(in, delim, split string) map[string]string {
-	out := map[string]string{}
-	for _, v := range strings.Split(in, delim) {
-		mark := strings.Index(v, split)
-		if mark < 0 || mark+1 >= len(v) {
+func configureHooks(esic *esctrl.EventSourceIngressController, config map[string]string) error {
+
+	var fileReader *file.File
+	for hook, provider := range config {
+		if hook == "" {
 			continue
 		}
-		out[v[:mark]] = v[mark+1:]
+		switch provider {
+		case "github":
+			githubGetter := ghc.New()
+			ghcl := iplister.NewCachedIPLister(githubGetter)
+			esic.SetIPGetter(hook, ghcl)
+		case "file":
+			if fileReader == nil {
+				fileReader = file.New(viper.GetString("IPFILE"))
+			}
+			d := filedecoder.New(hook)
+			g := iplister.New(fileReader, d)
+			c := iplister.NewCachedIPLister(g)
+			esic.SetIPGetter(hook, c)
+
+		case "officeips":
+			h := http.New(viper.GetString("OFFICEIP_URL"), http.WithBasicAuth(viper.GetString("OFFICEIP_USER"), viper.GetString("OFFICEIP_PASSWORD")))
+			d := officeips.New()
+			g := iplister.New(h, d)
+			c := iplister.NewCachedIPLister(g)
+			esic.SetIPGetter(hook, c)
+		case "any":
+			klog.Log.V(1).Info(fmt.Sprintf("The any provider is only designed for debug and testing use. Configuring for hook type: %s", hook))
+			g := &iplister.AnyGetter{}
+			esic.SetIPGetter(hook, g)
+
+		default:
+			err := fmt.Errorf("Unkonwn webhook provider type %s", provider)
+			klog.Log.Error(err, err.Error())
+			return err
+		}
 	}
-	return out
+	return nil
 }
