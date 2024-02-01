@@ -47,11 +47,11 @@ func (i *IstioClient) Remove(ctx context.Context, config *v1.EventSourceIngressC
 	sec := i.client.SecurityV1beta1()
 	net := i.client.NetworkingV1beta1()
 
-	if config == nil || config.Es.Name == "" || config.Es.Namespace == "" || config.AdminNamespace == "" || config.Gateway.Namespace == "" {
+	if config == nil || config.Eventsource.Name == "" || config.Eventsource.Namespace == "" || config.AdminNamespace == "" || config.Gateway.Namespace == "" {
 		return perrs.NewUnretryableError(fmt.Errorf("Empty namespaced name for event source"))
 	}
 
-	selector := fmt.Sprintf("%s=%s,%s=%s", common.EventSourceNameString, config.Es.Name, common.EventSourceNamespaceString, config.Es.Namespace)
+	selector := fmt.Sprintf("%s=%s,%s=%s", common.EventSourceNameString, config.Eventsource.Name, common.EventSourceNamespaceString, config.Eventsource.Namespace)
 
 	listOpts := metav1.ListOptions{
 		LabelSelector: selector,
@@ -67,11 +67,11 @@ func (i *IstioClient) Remove(ctx context.Context, config *v1.EventSourceIngressC
 	var errString string
 	if apErr != nil && !k8serrors.IsNotFound(apErr) {
 		log.V(5).Info("Istio api communication failure: %s", apErr.Error())
-		errString = fmt.Sprintf("%s%s", config.Es.String(), apErr.Error())
+		errString = fmt.Sprintf("%s%s", config.Eventsource.String(), apErr.Error())
 	}
 	if vsErr != nil && !k8serrors.IsNotFound(vsErr) {
 		log.V(5).Info("Istio api communication failure: %s", apErr.Error())
-		errString = fmt.Sprintf("%s%s", config.Es.String(), vsErr.Error())
+		errString = fmt.Sprintf("%s%s", config.Eventsource.String(), vsErr.Error())
 	}
 
 	if errString == "" {
@@ -133,25 +133,25 @@ func (i *IstioClient) Configure(ctx context.Context, config *v1.EventSourceIngre
 		return out, perrs.NewUnretryableError(fmt.Errorf("Nil config"))
 	}
 
-	cidrs, err := config.Ipg.GetIPs()
+	cidrs, err := config.IPGetter.GetIPs()
 	if err != nil {
-		log.V(5).Info(fmt.Sprintf("Failed to source IPs for %s: %s", config.Es.String(), err.Error()))
+		log.V(5).Info(fmt.Sprintf("Failed to source IPs for %s: %s", config.Eventsource.String(), err.Error()))
 		return out, perrs.NewRetryableError(err)
 	}
 
 	if len(cidrs) == 0 {
-		e := fmt.Errorf("Failed to source IPs for %s", config.Es.String())
+		e := fmt.Errorf("Failed to source IPs for %s", config.Eventsource.String())
 		log.V(1).Info(e.Error())
 		return out, perrs.NewRetryableError(e)
 	}
 
 	c := NewIstioConfig()
-	if e := c.ConfigureAP(config.AdminNamespace, config.BaseURL, config.Es, cidrs, config.Endpoints, i.gatewaySelector); e != nil {
-		log.V(5).Info("AuthroizationPolicy generation failure for %s", config.Es.String())
+	if e := c.ConfigureAP(config.AdminNamespace, config.BaseURL, config.Eventsource, cidrs, config.Endpoints, i.gatewaySelector); e != nil {
+		log.V(5).Info("AuthroizationPolicy generation failure for %s", config.Eventsource.String())
 		return out, e
 	}
-	if e := c.ConfigureVS(config.BaseURL, config.Gateway, config.Service, config.Es, config.Endpoints); e != nil {
-		log.V(5).Info("VirtualService generation failure for %s", config.Es.String())
+	if e := c.ConfigureVS(config.BaseURL, config.Gateway, config.Service, config.Eventsource, config.Endpoints); e != nil {
+		log.V(5).Info("VirtualService generation failure for %s", config.Eventsource.String())
 		return out, e
 	}
 

@@ -11,8 +11,8 @@ import (
 // ingress resources mapped to the service of an argo event source.
 // it is ingress provider agnostic.
 type EventSourceIngressConfig struct {
-	Ipg            IPGetter
-	Es             types.NamespacedName
+	IPGetter       IPGetter
+	Eventsource    types.NamespacedName
 	Endpoints      map[string]ingresscommon.NamedPath
 	AdminNamespace string
 	BaseURL        string

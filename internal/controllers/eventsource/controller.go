@@ -100,7 +100,7 @@ func (e *EventSourceIngressController) reconcile(ctx context.Context, es *esv1al
 	log.V(5).Info("Starting reconciliation for %s/%s", nsn.Namespace, nsn.Name)
 
 	esiConfig := v1.EventSourceIngressConfig{
-		Es:             nsn,
+		Eventsource:    nsn,
 		Gateway:        e.config.Gateway,
 		AdminNamespace: e.config.AdminNamespace,
 		BaseURL:        e.config.BaseURL,
@@ -161,7 +161,7 @@ func (e *EventSourceIngressController) reconcile(ctx context.Context, es *esv1al
 		return perrs.NewUnretryableError(errors.New(msg))
 	}
 
-	esiConfig.Ipg = ipGetter
+	esiConfig.IPGetter = ipGetter
 	names, err := e.igc.Configure(ctx, &esiConfig)
 	log.V(5).Info("Created resources %s", names)
 	return err
