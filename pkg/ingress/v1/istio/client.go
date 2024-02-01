@@ -57,8 +57,8 @@ func (i *IstioClient) Remove(ctx context.Context, config *v1.EventSourceIngressC
 		LabelSelector: selector,
 	}
 
-	apErr := sec.AuthorizationPolicies(config.AdminNamespace).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, listOpts)
-	vsErr := net.VirtualServices(config.Gateway.Namespace).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, listOpts)
+	apErr := sec.AuthorizationPolicies(config.AdminNamespace).DeleteCollection(ctx, metav1.DeleteOptions{}, listOpts)
+	vsErr := net.VirtualServices(config.Gateway.Namespace).DeleteCollection(ctx, metav1.DeleteOptions{}, listOpts)
 
 	if apErr == nil && vsErr == nil {
 		return nil
