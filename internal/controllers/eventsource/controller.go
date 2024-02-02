@@ -167,6 +167,66 @@ func (e *EventSourceIngressController) reconcile(ctx context.Context, es *esv1al
 	return err
 }
 
+func validateEventSource(es *esv1alpha1.EventSource) error {
+
+	if len(es.Spec.Webhook) == 0 && len(es.Spec.Github) == 0 {
+		return perrs.NewUnretryableError(fmt.Errorf("EventSource %s/%s has no supported webhook configuration", es.Namespace, es.Name))
+	}
+
+	if es.Spec.Webhook != nil {
+		var err error
+
+		for hook, spec := range es.Spec.Webhook {
+			e := validateWebhookEventSource(&spec)
+			if e != nil {
+				err = perrs.NewUnretryableError(errors.Join(err, fmt.Errorf("Webhook %s misconfigured: %w", hook, e)))
+			}
+		}
+
+		if err != nil {
+			return err
+		}
+	}
+
+	if es.Spec.Github != nil {
+		var err error
+
+		for hook, spec := range es.Spec.Github {
+			e := validateGithubEventSource(&spec)
+			if e != nil {
+				err = perrs.NewUnretryableError(errors.Join(err, fmt.Errorf("Github webhook %s misconfigured: %w", hook, e)))
+			}
+		}
+
+		if err != nil {
+			return err
+		}
+
+	}
+
+	return nil
+}
+
+func validateWebhookEventSource(spec *esv1alpha1.WebhookEventSource) error {
+	// This is Bearer token authentication provided by argo-events
+	if spec.AuthSecret == nil {
+		return perrs.NewUnretryableError(fmt.Errorf("Webhook EventSources require auth tokens. Ensure an authSecret secret selector configured."))
+	}
+
+	return nil
+}
+
+func validateGithubEventSource(spec *esv1alpha1.GithubEventSource) error {
+	// Github webhooks provide signed messages for validation of the message payload.
+	// verification is implemented by argo-events
+	// https://github.com/argoproj/argo-events/blob/e948d7337aec619dd48fb2a065126b025ed9281d/eventsources/sources/github/start.go#L383
+	if spec.WebhookSecret == nil {
+		return perrs.NewUnretryableError(fmt.Errorf("Github webhook EventSources require HMAC signing validation for ingress. Ensure a webhookSecret secret selector is provided."))
+	}
+
+	return nil
+}
+
 // ServiceToPortMapping - receives a Service and argo EventSource and returns a validated port lookup map of
 // NamedPaths. The lookup map allows mapping a target port to a desired path. It is generic for any eventsource
 // but only provides data for supported event source types, github and webhook currently.

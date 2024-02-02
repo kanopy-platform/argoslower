@@ -341,3 +341,62 @@ func TestServiceToPortMapping(t *testing.T) {
 	}
 
 }
+
+func TestValidateWebhookEventSource(t *testing.T) {
+	tests := map[string]struct {
+		spec *esv1alpha1.WebhookEventSource
+		err  bool
+	}{
+		"noauth": {
+			spec: &esv1alpha1.WebhookEventSource{},
+			err:  true,
+		},
+		"valid": {
+			spec: &esv1alpha1.WebhookEventSource{
+				WebhookContext: esv1alpha1.WebhookContext{
+					AuthSecret: &corev1.SecretKeySelector{},
+				},
+			},
+		},
+	}
+
+	for name, test := range tests {
+		e := validateWebhookEventSource(test.spec)
+
+		if test.err {
+			assert.Error(t, e, name)
+		} else {
+			assert.NoError(t, e, name)
+		}
+	}
+
+}
+
+func TestValidateGithubEventSource(t *testing.T) {
+
+	tests := map[string]struct {
+		spec *esv1alpha1.GithubEventSource
+		err  bool
+	}{
+		"noauth": {
+			spec: &esv1alpha1.GithubEventSource{},
+			err:  true,
+		},
+		"valid": {
+			spec: &esv1alpha1.GithubEventSource{
+				WebhookSecret: &corev1.SecretKeySelector{},
+			},
+		},
+	}
+
+	for name, test := range tests {
+		e := validateGithubEventSource(test.spec)
+
+		if test.err {
+			assert.Error(t, e, name)
+		} else {
+			assert.NoError(t, e, name)
+		}
+	}
+
+}
