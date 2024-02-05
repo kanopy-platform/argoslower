@@ -11,8 +11,17 @@ spec:
     ports:
     - port: 80
       targetPort: 8080
-  webhook:
+  github:
     example:
-      endpoint: /example
-      method: POST
-      port: "8080"
+      webhook:
+        endpoint: /example
+        method: POST
+        port: "8080"
+      repositories:
+        - owner: kanopy-platform
+          names:
+            - argoslower
+      webhookSecret:
+        name: argoslower-examples
+        key: token
+        optional: true

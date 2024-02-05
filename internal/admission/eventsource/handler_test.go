@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	admissionv1 "k8s.io/api/admission/v1"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -65,6 +66,11 @@ func TestEventSourceHandler(t *testing.T) {
 					},
 				},
 				Spec: esv1alpha1.EventSourceSpec{
+					Github: map[string]esv1alpha1.GithubEventSource{
+						"ghs": esv1alpha1.GithubEventSource{
+							WebhookSecret: &corev1.SecretKeySelector{},
+						},
+					},
 					Template: &esv1alpha1.Template{
 						Metadata: &common.Metadata{
 							Labels: map[string]string{
@@ -81,6 +87,13 @@ func TestEventSourceHandler(t *testing.T) {
 				ObjectMeta: v1.ObjectMeta{
 					Annotations: map[string]string{
 						eventsource.DefaultAnnotationKey: "false",
+					},
+				},
+				Spec: esv1alpha1.EventSourceSpec{
+					Github: map[string]esv1alpha1.GithubEventSource{
+						"ghs": esv1alpha1.GithubEventSource{
+							WebhookSecret: &corev1.SecretKeySelector{},
+						},
 					},
 				},
 			},
@@ -154,4 +167,132 @@ func TestEventSourceHandler(t *testing.T) {
 		assert.Equal(t, 1, len(resp.Patches), test.name)
 
 	}
+}
+
+func TestValidateEventSource(t *testing.T) {
+
+	tests := map[string]struct {
+		spec *esv1alpha1.EventSource
+		err  bool
+	}{
+
+		"no sources": {
+			spec: &esv1alpha1.EventSource{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "empty",
+					Namespace: "testing",
+				},
+			},
+			err: true,
+		},
+		"github no secret": {
+			spec: &esv1alpha1.EventSource{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "nosecret",
+					Namespace: "testing",
+				},
+				Spec: esv1alpha1.EventSourceSpec{
+					Github: map[string]esv1alpha1.GithubEventSource{},
+				},
+			},
+			err: true,
+		},
+		"github secret": {
+			spec: &esv1alpha1.EventSource{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "valid",
+					Namespace: "testing",
+				},
+				Spec: esv1alpha1.EventSourceSpec{
+					Github: map[string]esv1alpha1.GithubEventSource{
+						"ghs": esv1alpha1.GithubEventSource{
+							WebhookSecret: &corev1.SecretKeySelector{},
+						},
+					},
+				},
+			},
+		},
+		"github mixed": {
+			spec: &esv1alpha1.EventSource{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "nosecret",
+					Namespace: "testing",
+				},
+				Spec: esv1alpha1.EventSourceSpec{
+					Github: map[string]esv1alpha1.GithubEventSource{
+						"ghs": esv1alpha1.GithubEventSource{
+							WebhookSecret: &corev1.SecretKeySelector{},
+						},
+						"nos": esv1alpha1.GithubEventSource{},
+					},
+				},
+			},
+			err: true,
+		},
+		"webhook no secret": {
+			spec: &esv1alpha1.EventSource{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "nosecret",
+					Namespace: "testing",
+				},
+				Spec: esv1alpha1.EventSourceSpec{
+					Webhook: map[string]esv1alpha1.WebhookEventSource{
+						"nos": esv1alpha1.WebhookEventSource{
+							WebhookContext: esv1alpha1.WebhookContext{},
+						},
+					},
+				},
+			},
+			err: true,
+		},
+		"webhook valid": {
+			spec: &esv1alpha1.EventSource{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "valid",
+					Namespace: "testing",
+				},
+				Spec: esv1alpha1.EventSourceSpec{
+					Webhook: map[string]esv1alpha1.WebhookEventSource{
+						"ws": esv1alpha1.WebhookEventSource{
+							WebhookContext: esv1alpha1.WebhookContext{
+								AuthSecret: &corev1.SecretKeySelector{},
+							},
+						},
+					},
+				},
+			},
+		},
+		"webhook mixed": {
+			spec: &esv1alpha1.EventSource{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "nosecret",
+					Namespace: "testing",
+				},
+				Spec: esv1alpha1.EventSourceSpec{
+					Webhook: map[string]esv1alpha1.WebhookEventSource{
+						"ws": esv1alpha1.WebhookEventSource{
+							WebhookContext: esv1alpha1.WebhookContext{
+								AuthSecret: &corev1.SecretKeySelector{},
+							},
+						},
+						"nos": esv1alpha1.WebhookEventSource{
+							WebhookContext: esv1alpha1.WebhookContext{},
+						},
+					},
+				},
+			},
+			err: true,
+		},
+	}
+
+	for name, test := range tests {
+		e := eventsource.ValidateEventSource(test.spec)
+
+		if test.err {
+			assert.Error(t, e, name)
+		} else {
+			assert.NoError(t, e, name)
+		}
+	}
+
 }

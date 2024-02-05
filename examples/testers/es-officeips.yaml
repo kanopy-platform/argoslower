@@ -16,3 +16,7 @@ spec:
       endpoint: /example
       method: POST
       port: "8080"
+      authSecret:
+        name: argoslower-examples
+        key: token
+        optional: true
