@@ -169,7 +169,7 @@ func TestEventSourceHandler(t *testing.T) {
 	}
 }
 
-func TestValidateGithubEventSource(t *testing.T) {
+func TestValidateEventSource(t *testing.T) {
 
 	tests := map[string]struct {
 		spec *esv1alpha1.EventSource
