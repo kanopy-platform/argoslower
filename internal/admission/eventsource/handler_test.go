@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/kanopy-platform/argoslower/internal/admission/eventsource"
+	estest "github.com/kanopy-platform/argoslower/internal/admission/eventsource/testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -20,19 +22,10 @@ import (
 	esv1alpha1 "github.com/argoproj/argo-events/pkg/apis/eventsource/v1alpha1"
 )
 
-type FakeMeshChecker struct {
-	Mesh bool
-	Err  error
-}
-
-func (m *FakeMeshChecker) OnMesh(ns string) (bool, error) {
-	return m.Mesh, m.Err
-}
-
 func TestEventSourceHandler(t *testing.T) {
 
 	t.Parallel()
-	fmc := &FakeMeshChecker{
+	fmc := &estest.FakeMeshChecker{
 		Mesh: true,
 	}
 

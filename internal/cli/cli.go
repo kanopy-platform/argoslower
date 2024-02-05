@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
+	add "github.com/kanopy-platform/argoslower/internal/admission"
 	esadd "github.com/kanopy-platform/argoslower/internal/admission/eventsource"
 	sadd "github.com/kanopy-platform/argoslower/internal/admission/sensor"
 	esctrl "github.com/kanopy-platform/argoslower/internal/controllers/eventsource"
@@ -21,6 +22,7 @@ import (
 	"github.com/kanopy-platform/argoslower/pkg/namespace"
 	"github.com/kanopy-platform/argoslower/pkg/ratelimit"
 	stringutils "github.com/kanopy-platform/argoslower/pkg/stringutils"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"k8s.io/apimachinery/pkg/labels"
@@ -199,6 +201,9 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 	drlr := viper.GetInt32("default-requests-per-unit")
 	rlc := ratelimit.NewRateLimitCalculatorOrDie(drlu, drlr)
 
+	sensorHandler := sadd.NewHandler(nsInformer, rlc)
+	var eventSourceHandler *esadd.Handler
+
 	if viper.GetBool("enable-webhook-controller") {
 		//creater a filtered informer for resources with the event-source labal
 		selector := eventscommon.LabelEventSourceName
@@ -240,8 +245,7 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 		filteredIstioInformerFactory.Start(wait.NeverStop)
 		filteredIstioInformerFactory.WaitForCacheSync(wait.NeverStop)
 
-		sadd.NewHandler(nsInformer, rlc).SetupWithManager(mgr)
-		esadd.NewHandler(nsInformer).SetupWithManager(mgr)
+		eventSourceHandler = esadd.NewHandler(nsInformer)
 
 		gws := stringutils.StringToMap(viper.GetString("gateway-selector"), ",", "=")
 		if len(gws) == 0 {
@@ -284,6 +288,8 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 			return e
 		}
 	}
+
+	add.NewRoutingHandler(sensorHandler, eventSourceHandler).SetupWithManager(mgr)
 
 	return mgr.Start(ctx)
 }
