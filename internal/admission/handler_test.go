@@ -3,7 +3,6 @@ package admission
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"testing"
 
 	"github.com/kanopy-platform/argoslower/internal/admission/eventsource"
@@ -98,12 +97,10 @@ func TestRoutingHandler(t *testing.T) {
 		sck.RequestKind = &skind
 
 		resp := handler.Handle(context.TODO(), admission.Request{AdmissionRequest: *sck})
-		fmt.Println(resp.Result)
 		assert.Equal(t, !test.sdeny, resp.Allowed, name)
 
 		sck.RequestKind = nil
 		resp = handler.Handle(context.TODO(), admission.Request{AdmissionRequest: *sck})
-		fmt.Println(resp.Result)
 		assert.Equal(t, !test.sdeny, resp.Allowed, name)
 
 		esck := esar.DeepCopy()
@@ -114,12 +111,10 @@ func TestRoutingHandler(t *testing.T) {
 		esck.RequestKind = &eskind
 
 		resp = handler.Handle(context.TODO(), admission.Request{AdmissionRequest: *esck})
-		fmt.Println(resp.Result)
 		assert.Equal(t, !test.esdeny, resp.Allowed, name)
 
 		esck.RequestKind = nil
 		resp = handler.Handle(context.TODO(), admission.Request{AdmissionRequest: *esck})
-		fmt.Println(resp.Result)
 		assert.Equal(t, !test.esdeny, resp.Allowed, name)
 	}
 }
