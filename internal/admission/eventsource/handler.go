@@ -54,11 +54,9 @@ func (h *Handler) InjectDecoder(decoder *admission.Decoder) error {
 func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.Response {
 	log := log.FromContext(ctx)
 
-	log.Info(fmt.Sprintf("Received request: %v", req))
-
 	out := &esv1alpha1.EventSource{}
 
-	log.Info("Looking for annotation")
+	log.V(1).Info("Looking for annotation")
 	if err := h.decoder.Decode(req, out); err != nil {
 		log.Error(err, fmt.Sprintf("failed to decode eventsource request: %s", req.Name))
 		return admission.Errored(http.StatusBadRequest, err)
@@ -66,7 +64,7 @@ func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.R
 
 	_, ok := out.Annotations[h.annotationKey]
 	if !ok {
-		log.Info("Annotation not found, ignoring eventsource")
+		log.V(1).Info("Annotation not found, ignoring eventsource")
 		return admission.Allowed("No modifications needed")
 	}
 

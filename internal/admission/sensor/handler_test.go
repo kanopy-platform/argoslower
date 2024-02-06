@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"testing"
 
+	stest "github.com/kanopy-platform/argoslower/internal/admission/sensor/testing"
+
 	sensor "github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
 	"github.com/kanopy-platform/argoslower/pkg/ratelimit"
 	"github.com/stretchr/testify/assert"
@@ -16,29 +18,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-type fakeRateLimitGetter struct {
-	Rates map[string]*sensor.RateLimit
-	Err   error
-}
-
-func (frlg *fakeRateLimitGetter) RateLimit(namespace string) (*sensor.RateLimit, error) {
-	if r, ok := frlg.Rates[namespace]; ok {
-		return r, nil
-	} else {
-		return nil, frlg.Err
-	}
-}
-
-func newFakeRate() fakeRateLimitGetter {
-	return fakeRateLimitGetter{
-		Rates: map[string]*sensor.RateLimit{},
-	}
-}
-
 func TestSensorMutationHook(t *testing.T) {
 
 	t.Parallel()
-	frlg := newFakeRate()
+	frlg := stest.NewFakeRate()
 
 	testRate := &sensor.RateLimit{
 		Unit:            "Second",
