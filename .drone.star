@@ -1,150 +1,149 @@
-def main(ctx):
-    platforms = ["amd64", "arm64"]
+# workaround to render locally since you cant pass repo.branch to the cli
+def repo_branch(ctx):
+    return getattr(ctx.repo, "branch", "main")
 
-    volumes = [
-        {
-            "name": "cache",
-            "path": "/go",
-        }
-    ]
 
-    workspace = {"path": "/go/src/github.com/${DRONE_REPO}"}
+def version(ctx):
+    # use git commit if this is not a tag event
+    if ctx.build.event != "tag":
+        return "git-{}".format(commit(ctx))
 
-    resources = {"requests": {"cpu": 400, "memory": "2Gi"}}
+    return ctx.build.ref.removeprefix("refs/tags/")
 
-    trigger = {"branch": ["main"]}
 
-    test_steps = {
-        "test": append_volumes(test_step(), volumes),
+def version_tag(ctx, arch):
+    return "{}-{}".format(version(ctx), arch)
+
+
+def commit(ctx):
+    return ctx.build.commit[:7]
+
+
+def build_env(ctx):
+    return {
+        "GIT_COMMIT": commit(ctx),
+        "VERSION": version(ctx),
     }
 
-    pipelines = [
-        {
-            "kind": "pipeline",
-            "type": "kubernetes",
-            "name": "pre-build",
-            "resources": resources,
-            "steps": [append_volumes(license_step(), volumes)],
-            "trigger": trigger,
-            "volumes": volumes,
-            "workspace": workspace,
-        }
-    ]
-    for plat in platforms:
-        pipe = {
-            "kind": "pipeline",
-            "type": "kubernetes",
-            "name": plat,
-            "platform": {"arch": plat},
-            "resources": resources,
-            "steps": [v for v in test_steps.values()],
-            "trigger": trigger,
-            "volumes": volumes,
-            "workspace": workspace,
-        }
 
-        pipe = append_depends_on(pipe, ["pre-build"])
+def new_pipeline(name, arch, **kwargs):
+    pipeline = {
+        "kind": "pipeline",
+        "name": name,
+        "platform": {
+            "arch": arch,
+        },
+        "steps": [],
+    }
 
-        bsnp = build("build", plat, False, False)
-        bsnp = set_when(bsnp, {"event": ["pull_request"]})
-        bsnp = append_depends_on(bsnp, test_steps.keys())
-        bsnp = append_volumes(bsnp, volumes)
-        pipe["steps"].append(bsnp)
+    pipeline.update(kwargs)
 
-        bs = build("publish", plat, False, True)
-        bs = set_when(bs, {"event": ["push"]})
-        bs = append_depends_on(bs, test_steps.keys())
-        bs = append_volumes(bs, volumes)
-        pipe["steps"].append(bs)
+    return pipeline
 
-        bstp = build("publish-tag", plat, True, True)
-        bstp = set_when(bstp, {"event": ["tag"]})
-        bstp = append_volumes(bstp, volumes)
-        bstp = append_depends_on(bstp, test_steps.keys())
-        pipe["steps"].append(bstp)
 
-        pipelines.append(pipe)
+def pipeline_test(ctx):
+    cache_volume = {"name": "cache", "temp": {}}
+    cache_mount = {"name": "cache", "path": "/go"}
+
+    # licensed-go image only supports amd64
+    return new_pipeline(
+        name="test",
+        arch="amd64",
+        trigger={"branch": repo_branch(ctx)},
+        volumes=[cache_volume],
+        workspace={"path": "/go/src/github.com/{}".format(ctx.repo.slug)},
+        resources={"requests": {"cpu": 400, "memory": "2Gi"}},
+        steps=[
+            {
+                "commands": ["make test"],
+                "image": "golangci/golangci-lint",
+                "name": "test",
+                "volumes": [cache_mount],
+            },
+            {
+                "commands": ["licensed cache", "licensed status"],
+                "image": "public.ecr.aws/kanopy/licensed-go",
+                "name": "license-check",
+            },
+            {
+                "image": "plugins/kaniko-ecr",
+                "name": "build",
+                "pull": "always",
+                "settings": {"no_push": True},
+                "volumes": [cache_mount],
+                "when": {"event": ["pull_request"]},
+            },
+        ],
+    )
+
+
+def pipeline_build(ctx, arch):
+    return new_pipeline(
+        depends_on=["test"],
+        name="publish-{}".format(arch),
+        arch=arch,
+        steps=[
+            {
+                "environment": build_env(ctx),
+                "image": "plugins/kaniko-ecr",
+                "name": "publish",
+                "pull": "always",
+                "settings": {
+                    "access_key": {"from_secret": "ecr_access_key"},
+                    "secret_key": {"from_secret": "ecr_secret_key"},
+                    "registry": {"from_secret": "ecr_registry"},
+                    "repo": ctx.repo.name,
+                    "tags": [version_tag(ctx, arch)],
+                    "build_args": ["VERSION", "GIT_COMMIT"],
+                    "create_repository": True,
+                },
+            }
+        ],
+    )
+
+
+def pipeline_manifest(ctx):
+    targets = [version(ctx)]
+
+    # only use "latest" for tagged releases
+    if ctx.build.event == "tag":
+        targets.append("latest")
+
+    return new_pipeline(
+        depends_on=["publish-amd64", "publish-arm64"],
+        name="publish-manifest",
+        arch="arm64",
+        steps=[
+            {
+                "name": "manifest",
+                "image": "public.ecr.aws/kanopy/buildah-plugin:v0.1.1",
+                "settings": {
+                    "access_key": {"from_secret": "ecr_access_key"},
+                    "secret_key": {"from_secret": "ecr_secret_key"},
+                    "registry": {"from_secret": "ecr_registry"},
+                    "repo": ctx.repo.name,
+                    "manifest": {
+                        "sources": [
+                            version_tag(ctx, "amd64"),
+                            version_tag(ctx, "arm64"),
+                        ],
+                        "targets": targets,
+                    },
+                },
+            },
+        ],
+    )
+
+
+def main(ctx):
+    pipelines = [pipeline_test(ctx)]
+
+    # only perform image builds for "push" and "tag" events
+    if ctx.build.event == "tag" or (
+        ctx.build.branch == repo_branch(ctx) and ctx.build.event == "push"
+    ):
+        pipelines.append(pipeline_build(ctx, "amd64"))
+        pipelines.append(pipeline_build(ctx, "arm64"))
+        pipelines.append(pipeline_manifest(ctx))
 
     return pipelines
-
-
-def build(name, arch, tag, publish):
-    step = {
-        "name": name,
-        "image": "plugins/kaniko-ecr",
-        "pull": "always",
-        "environment": {
-            "GIT_COMMIT": "${DRONE_COMMIT_SHA:0:7}",
-        },
-        "settings": {
-            "repo": "${DRONE_REPO_NAME}",
-            "build_args": [
-                "GIT_COMMIT",
-            ],
-            "tags": [
-                "git-${DRONE_COMMIT_SHA:0:7}-" + arch,
-            ],
-            "create_repository": True,
-        },
-    }
-
-    if tag:
-        step["settings"]["tags"].append("${DRONE_TAG}-" + arch)
-        step["environment"]["VERSION"] = "${DRONE_TAG}-" + arch
-        step["settings"]["build_args"].append("VERSION")
-    else:
-        step["settings"]["tags"].append("latest-" + arch)
-
-    if publish:
-        step["settings"]["registry"] = {"from_secret": "ecr_registry"}
-        step["settings"]["access_key"] = {"from_secret": "ecr_access_key"}
-        step["settings"]["secret_key"] = {"from_secret": "ecr_secret_key"}
-    else:
-        step["settings"]["no_push"] = True
-
-    return step
-
-
-def test_step():
-    return {
-        "name": "test",
-        "image": "golangci/golangci-lint:v1.55.2",
-        "pull": "always",
-        "commands": ["make test"],
-    }
-
-
-def license_step():
-    return {
-        "name": "license-check",
-        "image": "public.ecr.aws/kanopy/licensed-go:3.7.3",
-        "commands": ["licensed cache", "licensed status"],
-    }
-
-
-def set_when(step, when_condition):
-    when_cons = getattr(step, "when", {})
-    for k, v in when_condition.items():
-        when_cons[k] = v
-
-    step["when"] = when_cons
-    return step
-
-
-def append_volumes(step, vols):
-    volumes = getattr(step, "volumes", [])
-    for i in vols:
-        volumes.append(i)
-
-    step["volumes"] = volumes
-    return step
-
-
-def append_depends_on(step, refs):
-    deps = getattr(step, "depends_on", [])
-
-    for ref in refs:
-        deps.append(ref)
-
-    step["depends_on"] = deps
-    return step
