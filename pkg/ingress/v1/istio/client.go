@@ -224,7 +224,7 @@ func (ic *IstioConfig) ConfigureVS(url string, gw, svc, es types.NamespacedName,
 		common.EventSourceNamespaceString: es.Namespace,
 	}
 
-	routes := make([]*netv1beta1.HTTPRoute, len(endpoints))
+	routes := make([]*netv1beta1.HTTPRoute, len(endpoints)*2)
 	index := 0
 	for port, endpoint := range endpoints {
 		uport64, err := strconv.ParseUint(port, 10, 32)
@@ -233,7 +233,40 @@ func (ic *IstioConfig) ConfigureVS(url string, gw, svc, es types.NamespacedName,
 		}
 		uport := uint32(uport64)
 
-		route := netv1beta1.HTTPRoute{
+		routes[index] = &netv1beta1.HTTPRoute{
+			Name: endpoint.Name,
+			DirectResponse: &netv1beta1.HTTPDirectResponse{
+				Status: 400,
+				Body: &netv1beta1.HTTPBody{
+					Specifier: &netv1beta1.HTTPBody_Bytes{
+						Bytes: []byte(`{"error":"invalid_request","error_description":"secret too short"}`),
+					},
+				},
+			},
+			Match: []*netv1beta1.HTTPMatchRequest{
+				&netv1beta1.HTTPMatchRequest{
+					Uri: &netv1beta1.StringMatch{
+						MatchType: &netv1beta1.StringMatch_Prefix{
+							Prefix: fmt.Sprintf("%s%s/", pathPrefix, endpoint.Path),
+						},
+					},
+					Headers: map[string]*netv1beta1.StringMatch{
+						"authorization": &netv1beta1.StringMatch{
+							MatchType: &netv1beta1.StringMatch_Regex{
+								// This regex is lax compared to the spec from
+								// https://tools.ietf.org/html/rfc6750#section-2.1
+								// but it aligns with the desired length requirements
+								// and implementation by argo events
+								Regex: `^Bearer\\s+\\S{0,11}\\s*$`,
+							},
+						},
+					},
+				},
+			},
+			Rewrite: &netv1beta1.HTTPRewrite{Uri: "/"},
+		}
+		index++
+		routes[index] = &netv1beta1.HTTPRoute{
 			Name: endpoint.Name,
 			Route: []*netv1beta1.HTTPRouteDestination{
 				&netv1beta1.HTTPRouteDestination{
@@ -256,8 +289,6 @@ func (ic *IstioConfig) ConfigureVS(url string, gw, svc, es types.NamespacedName,
 			},
 			Rewrite: &netv1beta1.HTTPRewrite{Uri: "/"},
 		}
-
-		routes[index] = &route
 		index++
 	}
 
