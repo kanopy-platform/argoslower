@@ -78,6 +78,7 @@ func TestConfigureVS(t *testing.T) {
 		for _, route := range vs.Spec.Http {
 			if route.DirectResponse != nil {
 				urlPrefix := route.Match[0].Uri.GetPrefix()
+				assert.Nil(t, route.Rewrite, test.name)
 				assert.True(t, strings.Contains(urlPrefix, fmt.Sprintf("/%s/%s", test.es.Namespace, test.es.Name)), test.name)
 				headerMatch := route.Match[0].Headers["authorization"].GetRegex()
 				assert.NotNil(t, headerMatch, test.name)

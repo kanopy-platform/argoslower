@@ -257,13 +257,12 @@ func (ic *IstioConfig) ConfigureVS(url string, gw, svc, es types.NamespacedName,
 								// https://tools.ietf.org/html/rfc6750#section-2.1
 								// but it aligns with the desired length requirements
 								// and implementation by argo events
-								Regex: `^Bearer\\s+\\S{0,11}\\s*$`,
+								Regex: `^Bearer\s+\S{0,11}\s*$`,
 							},
 						},
 					},
 				},
 			},
-			Rewrite: &netv1beta1.HTTPRewrite{Uri: "/"},
 		}
 		index++
 		routes[index] = &netv1beta1.HTTPRoute{
