@@ -82,7 +82,7 @@ func TestConfigureVS(t *testing.T) {
 				assert.True(t, strings.Contains(urlPrefix, fmt.Sprintf("/%s/%s", test.es.Namespace, test.es.Name)), test.name)
 				headerMatch := route.Match[0].Headers["authorization"].GetRegex()
 				assert.NotNil(t, headerMatch, test.name)
-				assert.Equal(t, `^Bearer\\s+\\S{0,11}\\s*$`, headerMatch, test.name)
+				assert.Equal(t, `^Bearer\s+\S{0,11}\s*$`, headerMatch, test.name)
 				directResponseCount++
 				continue
 			}
