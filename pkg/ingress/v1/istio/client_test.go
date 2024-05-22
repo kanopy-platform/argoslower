@@ -2,6 +2,7 @@ package istio
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	common "github.com/kanopy-platform/argoslower/pkg/ingress"
@@ -73,7 +74,19 @@ func TestConfigureVS(t *testing.T) {
 		assert.Equal(t, test.es.Name, vs.Labels[common.EventSourceNameString], test)
 		assert.Equal(t, test.es.Namespace, vs.Labels[common.EventSourceNamespaceString], test)
 
+		var directResponseCount int
 		for _, route := range vs.Spec.Http {
+			if route.DirectResponse != nil {
+				urlPrefix := route.Match[0].Uri.GetPrefix()
+				assert.Nil(t, route.Rewrite, test.name)
+				assert.True(t, strings.Contains(urlPrefix, fmt.Sprintf("/%s/%s", test.es.Namespace, test.es.Name)), test.name)
+				headerMatch := route.Match[0].Headers["authorization"].GetRegex()
+				assert.NotNil(t, headerMatch, test.name)
+				assert.Equal(t, `^Bearer\s+\S{0,11}\s*$`, headerMatch, test.name)
+				directResponseCount++
+				continue
+			}
+
 			// destination should be the fully qualified internal service name
 			assert.Equal(t, fmt.Sprintf("%s.%s.svc.cluster.local", test.svc.Name, test.svc.Namespace), route.Route[0].Destination.Host, test.name)
 
@@ -83,6 +96,7 @@ func TestConfigureVS(t *testing.T) {
 			urlPrefix := route.Match[0].Uri.GetPrefix()
 			assert.Equal(t, fmt.Sprintf("/%s/%s%s/", test.es.Namespace, test.es.Name, ep.Path), urlPrefix, test.name)
 		}
+		assert.Equal(t, directResponseCount, len(test.endpoints), test.name)
 	}
 }
 
