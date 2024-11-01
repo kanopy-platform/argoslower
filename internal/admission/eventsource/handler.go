@@ -70,7 +70,7 @@ func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.R
 		return admission.Allowed("No modifications needed")
 	}
 
-	if !h.knownSources[sourceValue] {
+	if _, ok := h.knownSources[sourceValue]; !ok {
 		return admission.Denied(fmt.Sprintf("Unknown webhook source '%s'. Only known webhook sources are allowed.", sourceValue))
 	}
 
