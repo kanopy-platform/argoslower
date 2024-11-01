@@ -24,12 +24,14 @@ type Handler struct {
 	annotationKey string
 	meshChecker   MeshChecker
 	decoder       *admission.Decoder
+	knownSources  map[string]bool
 }
 
-func NewHandler(mc MeshChecker) *Handler {
+func NewHandler(mc MeshChecker, knownSources map[string]bool) *Handler {
 	return &Handler{
 		annotationKey: DefaultAnnotationKey,
 		meshChecker:   mc,
+		knownSources:  knownSources,
 	}
 }
 
@@ -62,10 +64,14 @@ func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.R
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
-	_, ok := out.Annotations[h.annotationKey]
+	sourceValue, ok := out.Annotations[h.annotationKey]
 	if !ok {
 		log.V(1).Info("Annotation not found, ignoring eventsource")
 		return admission.Allowed("No modifications needed")
+	}
+
+	if _, ok := h.knownSources[sourceValue]; !ok {
+		return admission.Denied(fmt.Sprintf("Unknown webhook source '%s'. Only known webhook sources are allowed.", sourceValue))
 	}
 
 	onMesh, err := h.meshChecker.OnMesh(out.Namespace)

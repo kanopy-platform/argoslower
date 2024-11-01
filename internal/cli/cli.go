@@ -245,8 +245,6 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 		filteredIstioInformerFactory.Start(wait.NeverStop)
 		filteredIstioInformerFactory.WaitForCacheSync(wait.NeverStop)
 
-		eventSourceHandler = esadd.NewHandler(nsInformer)
-
 		gws := stringutils.StringToMap(viper.GetString("gateway-selector"), ",", "=")
 		if len(gws) == 0 {
 			return fmt.Errorf("Invalid gateway-selector: %s", viper.GetString("gateway-selector"))
@@ -269,6 +267,8 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
+
+		eventSourceHandler = esadd.NewHandler(nsInformer, escc.GetKnownSources())
 
 		esi.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc: func(new interface{}) {}})

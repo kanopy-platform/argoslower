@@ -29,7 +29,11 @@ func TestEventSourceHandler(t *testing.T) {
 		Mesh: true,
 	}
 
-	handler := eventsource.NewHandler(fmc)
+	knownSources := map[string]bool{
+		"github": true,
+	}
+
+	handler := eventsource.NewHandler(fmc, knownSources)
 	scheme := runtime.NewScheme()
 	utilruntime.Must(esv1alpha1.AddToScheme(scheme))
 	decoder, err := admission.NewDecoder(scheme)
@@ -55,7 +59,7 @@ func TestEventSourceHandler(t *testing.T) {
 			es: esv1alpha1.EventSource{
 				ObjectMeta: v1.ObjectMeta{
 					Annotations: map[string]string{
-						eventsource.DefaultAnnotationKey: "true",
+						eventsource.DefaultAnnotationKey: "github",
 					},
 				},
 				Spec: esv1alpha1.EventSourceSpec{
@@ -79,7 +83,7 @@ func TestEventSourceHandler(t *testing.T) {
 			es: esv1alpha1.EventSource{
 				ObjectMeta: v1.ObjectMeta{
 					Annotations: map[string]string{
-						eventsource.DefaultAnnotationKey: "false",
+						eventsource.DefaultAnnotationKey: "github",
 					},
 				},
 				Spec: esv1alpha1.EventSourceSpec{
@@ -96,7 +100,7 @@ func TestEventSourceHandler(t *testing.T) {
 			es: esv1alpha1.EventSource{
 				ObjectMeta: v1.ObjectMeta{
 					Annotations: map[string]string{
-						eventsource.DefaultAnnotationKey: "true",
+						eventsource.DefaultAnnotationKey: "github",
 					},
 				},
 			},
@@ -107,13 +111,25 @@ func TestEventSourceHandler(t *testing.T) {
 			es: esv1alpha1.EventSource{
 				ObjectMeta: v1.ObjectMeta{
 					Annotations: map[string]string{
-						eventsource.DefaultAnnotationKey: "true",
+						eventsource.DefaultAnnotationKey: "github",
 					},
 				},
 			},
 			nsErr: errors.New("test error"),
 		},
+		{
+			name: "Unknown Source",
+			es: esv1alpha1.EventSource{
+				ObjectMeta: v1.ObjectMeta{
+					Annotations: map[string]string{
+						eventsource.DefaultAnnotationKey: "unknown-source",
+					},
+				},
+			},
+			err: true,
+		},
 	}
+
 	for _, test := range tests {
 		if test.key == "" {
 			test.key = eventsource.DefaultAnnotationKey
@@ -140,7 +156,7 @@ func TestEventSourceHandler(t *testing.T) {
 
 		if test.nsErr != nil {
 			assert.False(t, resp.AdmissionResponse.Allowed, test.name)
-			assert.True(t, resp.AdmissionResponse.Result.Message == test.nsErr.Error(), test.name)
+			assert.Equal(t, test.nsErr.Error(), resp.AdmissionResponse.Result.Message, test.name)
 			continue
 		}
 
@@ -151,6 +167,12 @@ func TestEventSourceHandler(t *testing.T) {
 			continue
 		}
 
+		if test.err {
+			assert.False(t, resp.AdmissionResponse.Allowed, test.name)
+			assert.Contains(t, resp.AdmissionResponse.Result.Reason, "Unknown webhook source", test.name)
+			continue
+		}
+
 		if test.nsOnMesh != nil {
 			assert.False(t, resp.AdmissionResponse.Allowed, test.name)
 			continue
@@ -158,7 +180,6 @@ func TestEventSourceHandler(t *testing.T) {
 
 		assert.True(t, resp.AdmissionResponse.Allowed, test.name)
 		assert.Equal(t, 1, len(resp.Patches), test.name)
-
 	}
 }
 

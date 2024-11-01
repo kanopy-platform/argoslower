@@ -341,3 +341,27 @@ func TestServiceToPortMapping(t *testing.T) {
 	}
 
 }
+
+// Faking IPGetter interface
+type FakeIPGetter struct{}
+
+func (f *FakeIPGetter) GetIPs() ([]string, error) {
+	return []string{"0.0.0.0/32"}, nil
+}
+
+func TestGetKnownSources(t *testing.T) {
+	escConfig := NewEventSourceIngressControllerConfig()
+
+	// Mimic the cli configuration
+	escConfig.SetIPGetter("github", &FakeIPGetter{})
+	escConfig.SetIPGetter("officeips", &FakeIPGetter{})
+
+	knownSources := escConfig.GetKnownSources()
+
+	expectedSources := map[string]bool{
+		"github":    true,
+		"officeips": true,
+	}
+
+	assert.Equal(t, expectedSources, knownSources)
+}
