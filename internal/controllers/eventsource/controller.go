@@ -52,6 +52,14 @@ func (c *EventSourceIngressControllerConfig) SetIPGetter(name string, getter v1.
 	c.ipGetters[name] = getter
 }
 
+func (c *EventSourceIngressControllerConfig) GetKnownSources() map[string]bool {
+	knownSources := make(map[string]bool)
+	for source := range c.ipGetters {
+		knownSources[source] = true
+	}
+	return knownSources
+}
+
 func NewEventSourceIngressController(esl eslister.EventSourceLister, svcl corev1lister.ServiceLister, config EventSourceIngressControllerConfig, igc v1.IngressConfigurator) *EventSourceIngressController {
 	return &EventSourceIngressController{
 		esLister:      esl,

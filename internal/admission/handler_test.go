@@ -66,6 +66,10 @@ func TestRoutingHandler(t *testing.T) {
 		Mesh: true,
 	}
 
+	knownSources := map[string]bool{
+		"github": true,
+	}
+
 	tests := map[string]struct {
 		sensor *sensor.Handler
 		es     *eventsource.Handler
@@ -74,8 +78,8 @@ func TestRoutingHandler(t *testing.T) {
 	}{
 		"empty":      {sdeny: true, esdeny: true},
 		"sensoronly": {sensor: sensor.NewHandler(&frlg, rc), esdeny: true},
-		"esonly":     {es: eventsource.NewHandler(fmc), sdeny: true},
-		"both":       {sensor: sensor.NewHandler(&frlg, rc), es: eventsource.NewHandler(fmc)},
+		"esonly":     {es: eventsource.NewHandler(fmc, knownSources), sdeny: true},
+		"both":       {sensor: sensor.NewHandler(&frlg, rc), es: eventsource.NewHandler(fmc, knownSources)},
 	}
 
 	for name, test := range tests {
