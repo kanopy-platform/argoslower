@@ -38,10 +38,9 @@ func TestSensorMutationHook(t *testing.T) {
 
 	scheme := runtime.NewScheme()
 	utilruntime.Must(sensor.AddToScheme(scheme))
-	decoder, err := admission.NewDecoder(scheme)
-	assert.NoError(t, err)
+	decoder := admission.NewDecoder(scheme)
 
-	err = h.InjectDecoder(decoder)
+	err := h.InjectDecoder(decoder)
 	assert.NoError(t, err)
 
 	sen := sensor.Sensor{
