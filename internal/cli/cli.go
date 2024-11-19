@@ -190,9 +190,12 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 	k8sInformerFactory := informers.NewSharedInformerFactoryWithOptions(k8sClientSet, 1*time.Minute)
 
 	namespacesInformer := k8sInformerFactory.Core().V1().Namespaces()
-	namespacesInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+	_, err = namespacesInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(new interface{}) {},
 	})
+	if err != nil {
+		klog.Log.Error(err, "unable to add event handler to the namespaces informer")
+	}
 
 	k8sInformerFactory.Start(wait.NeverStop)
 	k8sInformerFactory.WaitForCacheSync(wait.NeverStop)
@@ -224,9 +227,12 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 		filteredk8sInformerFactory := informers.NewSharedInformerFactoryWithOptions(k8sClientSet, 1*time.Minute, labelOptions)
 
 		filteredServiceInfomer := filteredk8sInformerFactory.Core().V1().Services()
-		filteredServiceInfomer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		_, err = filteredServiceInfomer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc: func(new interface{}) {},
 		})
+		if err != nil {
+			klog.Log.Error(err, "unable to add event handler to the filtered service informer")
+		}
 
 		filteredk8sInformerFactory.Start(wait.NeverStop)
 		filteredk8sInformerFactory.WaitForCacheSync(wait.NeverStop)
@@ -238,14 +244,20 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 		filteredIstioInformerFactory := istioinformer.NewSharedInformerFactoryWithOptions(istioCS, 1*time.Minute, istioOptions)
 
 		filteredVirtualServiceInfomer := filteredIstioInformerFactory.Networking().V1beta1().VirtualServices().Informer()
-		filteredVirtualServiceInfomer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		_, err = filteredVirtualServiceInfomer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc: func(new interface{}) {},
 		})
+		if err != nil {
+			klog.Log.Error(err, "unable to add event handler to the filtered virtualService informer")
+		}
 
 		filteredAuthorizationPolicyInformer := filteredIstioInformerFactory.Security().V1beta1().AuthorizationPolicies().Informer()
-		filteredAuthorizationPolicyInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		_, err = filteredAuthorizationPolicyInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc: func(new interface{}) {},
 		})
+		if err != nil {
+			klog.Log.Error(err, "unable to add event handler to the filtered authorizationPolicy informer")
+		}
 
 		filteredIstioInformerFactory.Start(wait.NeverStop)
 		filteredIstioInformerFactory.WaitForCacheSync(wait.NeverStop)
@@ -275,8 +287,11 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 
 		eventSourceHandler = esadd.NewHandler(nsInformer, escc.GetKnownSources())
 
-		esi.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		_, err = esi.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc: func(new interface{}) {}})
+		if err != nil {
+			klog.Log.Error(err, "unable to add event handler to the esi informer")
+		}
 
 		esinformerFactory.Start(wait.NeverStop)
 		esinformerFactory.WaitForCacheSync(wait.NeverStop)
