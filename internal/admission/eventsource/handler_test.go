@@ -36,9 +36,8 @@ func TestEventSourceHandler(t *testing.T) {
 	handler := eventsource.NewHandler(fmc, knownSources)
 	scheme := runtime.NewScheme()
 	utilruntime.Must(esv1alpha1.AddToScheme(scheme))
-	decoder, err := admission.NewDecoder(scheme)
-	assert.NoError(t, err)
-	err = handler.InjectDecoder(decoder)
+	decoder := admission.NewDecoder(scheme)
+	err := handler.InjectDecoder(decoder)
 	assert.NoError(t, err)
 
 	f := false

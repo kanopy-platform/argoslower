@@ -43,7 +43,9 @@ import (
 	klog "sigs.k8s.io/controller-runtime/pkg/log"
 	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	sensor "github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
 
@@ -150,16 +152,19 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 	setupScheme()
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
-		Scheme:                     scheme,
-		Host:                       "0.0.0.0",
-		Port:                       viper.GetInt("webhook-listen-port"),
-		CertDir:                    viper.GetString("webhook-certs-dir"),
-		MetricsBindAddress:         fmt.Sprintf("0.0.0.0:%d", viper.GetInt("metrics-listen-port")),
+		Scheme: scheme,
+		WebhookServer: webhook.NewServer(webhook.Options{
+			Host:    "0.0.0.0",
+			Port:    viper.GetInt("webhook-listen-port"),
+			CertDir: viper.GetString("webhook-certs-dir"),
+		}),
+		Metrics: server.Options{
+			BindAddress: fmt.Sprintf("0.0.0.0:%d", viper.GetInt("metrics-listen-port")),
+		},
 		HealthProbeBindAddress:     ":8080",
 		LeaderElection:             true,
 		LeaderElectionID:           "argoslower",
 		LeaderElectionResourceLock: "leases",
-		DryRunClient:               dryRun,
 	})
 
 	if err != nil {
