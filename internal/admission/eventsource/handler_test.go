@@ -168,7 +168,8 @@ func TestEventSourceHandler(t *testing.T) {
 
 		if test.err {
 			assert.False(t, resp.AdmissionResponse.Allowed, test.name)
-			assert.Contains(t, resp.AdmissionResponse.Result.Reason, "Unknown webhook source", test.name)
+			assert.Contains(t, resp.AdmissionResponse.Result.Reason, "Forbidden", test.name)
+			assert.Contains(t, resp.AdmissionResponse.Result.Message, "Unknown webhook source", test.name)
 			continue
 		}
 
