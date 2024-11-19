@@ -8,7 +8,6 @@ replace (
 	k8s.io/apimachinery v0.26.0 => k8s.io/apimachinery v0.25.16
 	k8s.io/client-go v0.26.0 => k8s.io/client-go v0.25.16
 	k8s.io/component-base v0.24.13 => k8s.io/component-base v0.25.16
-	k8s.io/kube-openapi v0.0.0-20220627174259-011e075b9cb8 => k8s.io/kube-openapi v0.0.0-20220114203427-a0453230fd26
 )
 
 require (
