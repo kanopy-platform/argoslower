@@ -138,12 +138,6 @@ def pipeline_manifest(ctx):
 def main(ctx):
     pipelines = [pipeline_test(ctx)]
 
-    if ctx.build.event == "pull_request" or (
-        ctx.build.event == "push"
-    ):
-        pipelines.append(pipeline_build(ctx, "amd64"))
-        pipelines.append(pipeline_build(ctx, "arm64"))
-
     # only perform image builds for "push" and "tag" events
     if ctx.build.event == "tag" or (
         ctx.build.branch == repo_branch(ctx) and ctx.build.event == "push"
