@@ -37,6 +37,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -165,6 +166,9 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 		LeaderElection:             true,
 		LeaderElectionID:           "argoslower",
 		LeaderElectionResourceLock: "leases",
+		Client: client.Options{
+			DryRun: &dryRun,
+		},
 	})
 
 	if err != nil {
