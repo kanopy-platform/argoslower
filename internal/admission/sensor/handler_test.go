@@ -40,8 +40,7 @@ func TestSensorMutationHook(t *testing.T) {
 	utilruntime.Must(sensor.AddToScheme(scheme))
 	decoder := admission.NewDecoder(scheme)
 
-	err := h.InjectDecoder(decoder)
-	assert.NoError(t, err)
+	assert.NoError(t,  h.InjectDecoder(decoder))
 
 	sen := sensor.Sensor{
 		ObjectMeta: v1.ObjectMeta{
