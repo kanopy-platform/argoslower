@@ -87,7 +87,7 @@ func TestRoutingHandler(t *testing.T) {
 		scheme := runtime.NewScheme()
 		decoder := admission.NewDecoder(scheme)
 
-		handler := NewRoutingHandler(test.sensor, test.es)
+		handler := NewRoutingHandler(test.sensor, test.es, decoder)
 
 		err = handler.InjectDecoder(decoder)
 		assert.NoError(t, err)

@@ -18,7 +18,10 @@ type RoutingHandler struct {
 	eventSourceHandler *event.Handler
 }
 
-func NewRoutingHandler(sh *sensor.Handler, es *event.Handler) *RoutingHandler {
+func NewRoutingHandler(sh *sensor.Handler, es *event.Handler, decoder *admission.Decoder) *RoutingHandler {
+	sh.InjectDecoder(decoder)
+	es.InjectDecoder(decoder)
+
 	return &RoutingHandler{
 		sensorHandler:      sh,
 		eventSourceHandler: es,

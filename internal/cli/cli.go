@@ -47,6 +47,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	sensor "github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
 
@@ -313,7 +314,7 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	add.NewRoutingHandler(sensorHandler, eventSourceHandler).SetupWithManager(mgr)
+	add.NewRoutingHandler(sensorHandler, eventSourceHandler, admission.NewDecoder(mgr.GetScheme())).SetupWithManager(mgr)
 
 	return mgr.Start(ctx)
 }

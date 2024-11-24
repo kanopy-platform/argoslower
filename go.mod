@@ -1,6 +1,6 @@
 module github.com/kanopy-platform/argoslower
 
-go 1.21
+go 1.23
 
 require (
 	github.com/argoproj/argo-events v1.9.2
