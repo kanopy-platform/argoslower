@@ -18,14 +18,18 @@ type RoutingHandler struct {
 	eventSourceHandler *event.Handler
 }
 
-func NewRoutingHandler(sh *sensor.Handler, es *event.Handler, decoder *admission.Decoder) *RoutingHandler {
-	sh.InjectDecoder(decoder)
-	es.InjectDecoder(decoder)
+func NewRoutingHandler(sh *sensor.Handler, es *event.Handler, decoder *admission.Decoder) (*RoutingHandler, error) {
+	if err := sh.InjectDecoder(decoder); err != nil {
+		return nil, err
+	}
+	if err := es.InjectDecoder(decoder); err != nil {
+		return nil, err
+	}
 
 	return &RoutingHandler{
 		sensorHandler:      sh,
 		eventSourceHandler: es,
-	}
+	}, nil
 }
 
 func (h *RoutingHandler) Handle(ctx context.Context, req admission.Request) admission.Response {
