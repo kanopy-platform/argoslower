@@ -10,4 +10,4 @@ spec:
     - -D
     streamConfig: |
       maxAge: 168h
-    version: 2.9.16
+    version: 2.10.10

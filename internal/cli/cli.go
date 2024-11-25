@@ -37,13 +37,17 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	klog "sigs.k8s.io/controller-runtime/pkg/log"
 	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	sensor "github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
 
@@ -150,16 +154,22 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 	setupScheme()
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
-		Scheme:                     scheme,
-		Host:                       "0.0.0.0",
-		Port:                       viper.GetInt("webhook-listen-port"),
-		CertDir:                    viper.GetString("webhook-certs-dir"),
-		MetricsBindAddress:         fmt.Sprintf("0.0.0.0:%d", viper.GetInt("metrics-listen-port")),
+		Scheme: scheme,
+		WebhookServer: webhook.NewServer(webhook.Options{
+			Host:    "0.0.0.0",
+			Port:    viper.GetInt("webhook-listen-port"),
+			CertDir: viper.GetString("webhook-certs-dir"),
+		}),
+		Metrics: server.Options{
+			BindAddress: fmt.Sprintf("0.0.0.0:%d", viper.GetInt("metrics-listen-port")),
+		},
 		HealthProbeBindAddress:     ":8080",
 		LeaderElection:             true,
 		LeaderElectionID:           "argoslower",
 		LeaderElectionResourceLock: "leases",
-		DryRunClient:               dryRun,
+		Client: client.Options{
+			DryRun: &dryRun,
+		},
 	})
 
 	if err != nil {
@@ -185,9 +195,12 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 	k8sInformerFactory := informers.NewSharedInformerFactoryWithOptions(k8sClientSet, 1*time.Minute)
 
 	namespacesInformer := k8sInformerFactory.Core().V1().Namespaces()
-	namespacesInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+	_, err = namespacesInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(new interface{}) {},
 	})
+	if err != nil {
+		klog.Log.Error(err, "unable to add event handler to the namespaces informer")
+	}
 
 	k8sInformerFactory.Start(wait.NeverStop)
 	k8sInformerFactory.WaitForCacheSync(wait.NeverStop)
@@ -202,6 +215,11 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 	rlc := ratelimit.NewRateLimitCalculatorOrDie(drlu, drlr)
 
 	sensorHandler := sadd.NewHandler(nsInformer, rlc)
+	err = sensorHandler.InjectDecoder(admission.NewDecoder(mgr.GetScheme()))
+	if err != nil {
+		return err
+	}
+
 	var eventSourceHandler *esadd.Handler
 
 	if viper.GetBool("enable-webhook-controller") {
@@ -219,9 +237,12 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 		filteredk8sInformerFactory := informers.NewSharedInformerFactoryWithOptions(k8sClientSet, 1*time.Minute, labelOptions)
 
 		filteredServiceInfomer := filteredk8sInformerFactory.Core().V1().Services()
-		filteredServiceInfomer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		_, err = filteredServiceInfomer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc: func(new interface{}) {},
 		})
+		if err != nil {
+			klog.Log.Error(err, "unable to add event handler to the filtered service informer")
+		}
 
 		filteredk8sInformerFactory.Start(wait.NeverStop)
 		filteredk8sInformerFactory.WaitForCacheSync(wait.NeverStop)
@@ -233,14 +254,20 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 		filteredIstioInformerFactory := istioinformer.NewSharedInformerFactoryWithOptions(istioCS, 1*time.Minute, istioOptions)
 
 		filteredVirtualServiceInfomer := filteredIstioInformerFactory.Networking().V1beta1().VirtualServices().Informer()
-		filteredVirtualServiceInfomer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		_, err = filteredVirtualServiceInfomer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc: func(new interface{}) {},
 		})
+		if err != nil {
+			klog.Log.Error(err, "unable to add event handler to the filtered virtualService informer")
+		}
 
 		filteredAuthorizationPolicyInformer := filteredIstioInformerFactory.Security().V1beta1().AuthorizationPolicies().Informer()
-		filteredAuthorizationPolicyInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		_, err = filteredAuthorizationPolicyInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc: func(new interface{}) {},
 		})
+		if err != nil {
+			klog.Log.Error(err, "unable to add event handler to the filtered authorizationPolicy informer")
+		}
 
 		filteredIstioInformerFactory.Start(wait.NeverStop)
 		filteredIstioInformerFactory.WaitForCacheSync(wait.NeverStop)
@@ -269,9 +296,16 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 		}
 
 		eventSourceHandler = esadd.NewHandler(nsInformer, escc.GetKnownSources())
+		err = eventSourceHandler.InjectDecoder(admission.NewDecoder(mgr.GetScheme()))
+		if err != nil {
+			return err
+		}
 
-		esi.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		_, err = esi.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc: func(new interface{}) {}})
+		if err != nil {
+			klog.Log.Error(err, "unable to add event handler to the esi informer")
+		}
 
 		esinformerFactory.Start(wait.NeverStop)
 		esinformerFactory.WaitForCacheSync(wait.NeverStop)

@@ -36,9 +36,8 @@ func TestEventSourceHandler(t *testing.T) {
 	handler := eventsource.NewHandler(fmc, knownSources)
 	scheme := runtime.NewScheme()
 	utilruntime.Must(esv1alpha1.AddToScheme(scheme))
-	decoder, err := admission.NewDecoder(scheme)
-	assert.NoError(t, err)
-	err = handler.InjectDecoder(decoder)
+	decoder := admission.NewDecoder(scheme)
+	err := handler.InjectDecoder(decoder)
 	assert.NoError(t, err)
 
 	f := false
@@ -169,7 +168,8 @@ func TestEventSourceHandler(t *testing.T) {
 
 		if test.err {
 			assert.False(t, resp.AdmissionResponse.Allowed, test.name)
-			assert.Contains(t, resp.AdmissionResponse.Result.Reason, "Unknown webhook source", test.name)
+			assert.Contains(t, resp.AdmissionResponse.Result.Reason, "Forbidden", test.name)
+			assert.Contains(t, resp.AdmissionResponse.Result.Message, "Unknown webhook source", test.name)
 			continue
 		}
 
