@@ -215,6 +215,11 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 	rlc := ratelimit.NewRateLimitCalculatorOrDie(drlu, drlr)
 
 	sensorHandler := sadd.NewHandler(nsInformer, rlc)
+	err = sensorHandler.InjectDecoder(admission.NewDecoder(mgr.GetScheme()))
+	if err != nil {
+		return err
+	}
+
 	var eventSourceHandler *esadd.Handler
 
 	if viper.GetBool("enable-webhook-controller") {
@@ -291,6 +296,10 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 		}
 
 		eventSourceHandler = esadd.NewHandler(nsInformer, escc.GetKnownSources())
+		err = eventSourceHandler.InjectDecoder(admission.NewDecoder(mgr.GetScheme()))
+		if err != nil {
+			return err
+		}
 
 		_, err = esi.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc: func(new interface{}) {}})
@@ -314,7 +323,7 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	add.NewRoutingHandler(sensorHandler, eventSourceHandler, admission.NewDecoder(mgr.GetScheme())).SetupWithManager(mgr)
+	add.NewRoutingHandler(sensorHandler, eventSourceHandler).SetupWithManager(mgr)
 
 	return mgr.Start(ctx)
 }
