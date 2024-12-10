@@ -11,7 +11,7 @@ build:
       ko:
         main: ./cmd/
 deploy:
-  kubeContext: minikube
+  kubeContext: kind-kind
   kubectl:
     defaultNamespace: argo
     manifests:
