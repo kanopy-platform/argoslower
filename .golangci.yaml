@@ -1,11 +1,31 @@
-run:
-  # The default concurrency value is the number of available CPU.
-  concurrency: 4
-  # Timeout for analysis, e.g. 30s, 5m.
-  # Default: 1m
-  timeout: 5m
-  build-tags: []
-  modules-download-mode: readonly
-  # Allow multiple parallel golangci-lint instances running.
-  # If false (default) - golangci-lint acquires file lock on start.
-  allow-parallel-runners: false
+version: "2"
+linters:
+  settings:
+    staticcheck:
+      # See https://golangci-lint.run/usage/linters/#staticcheck for description
+      checks:
+        - all
+        - '-QF1008'
+        - '-ST1003'
+        - '-ST1005'
+        - '-ST1016'
+  disable:
+    - testpackage
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
