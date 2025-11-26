@@ -1,16 +1,9 @@
 version: "2"
+run:
+  concurrency: 4
+  modules-download-mode: readonly
+  allow-parallel-runners: false
 linters:
-  settings:
-    staticcheck:
-      # See https://golangci-lint.run/usage/linters/#staticcheck for description
-      checks:
-        - all
-        - '-QF1008'
-        - '-ST1003'
-        - '-ST1005'
-        - '-ST1016'
-  disable:
-    - testpackage
   exclusions:
     generated: lax
     presets:
