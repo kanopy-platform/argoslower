@@ -18,9 +18,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	corev1lister "k8s.io/client-go/listers/core/v1"
 
-	eventscommon "github.com/argoproj/argo-events/common"
-	esv1alpha1 "github.com/argoproj/argo-events/pkg/apis/eventsource/v1alpha1"
-	eslister "github.com/argoproj/argo-events/pkg/client/eventsource/listers/eventsource/v1alpha1"
+	esv1alpha1 "github.com/argoproj/argo-events/pkg/apis/events/v1alpha1"
+	eslister "github.com/argoproj/argo-events/pkg/client/listers/events/v1alpha1"
 
 	"k8s.io/apimachinery/pkg/labels"
 )
@@ -80,7 +79,7 @@ func (e *EventSourceIngressController) SetIPGetter(name string, getter v1.IPGett
 func (e *EventSourceIngressController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	eventSource, err := e.esLister.EventSources(req.NamespacedName.Namespace).Get(req.NamespacedName.Name)
+	eventSource, err := e.esLister.EventSources(req.Namespace).Get(req.Name)
 	if err != nil && !k8serror.IsNotFound(err) {
 		log.Error(err, fmt.Sprintf("unable to get eventsource %v", req))
 		return ctrl.Result{
@@ -125,7 +124,7 @@ func (e *EventSourceIngressController) reconcile(ctx context.Context, es *esv1al
 
 	selector, err := labels.ValidatedSelectorFromSet(
 		labels.Set(map[string]string{
-			eventscommon.LabelEventSourceName: nsn.Name,
+			esv1alpha1.LabelEventSourceName: nsn.Name,
 		}),
 	)
 	if err != nil {
@@ -139,13 +138,13 @@ func (e *EventSourceIngressController) reconcile(ctx context.Context, es *esv1al
 	}
 
 	if len(svcl) != 1 {
-		return perrs.NewRetryableError(fmt.Errorf("Cannot Select a service for event source %s/%s. Want 1 received: %d", nsn.Namespace, nsn.Name, len(svcl)))
+		return perrs.NewRetryableError(fmt.Errorf("cannot select a service for event source %s/%s. Want 1 received: %d", nsn.Namespace, nsn.Name, len(svcl)))
 	}
 
 	svc := svcl[0]
 	if svc == nil {
 		//This might not be retryable if the api is returning a nil service but we will requeue for now
-		return perrs.NewRetryableError(fmt.Errorf("Expected a Service resource and got: %v", svc))
+		return perrs.NewRetryableError(fmt.Errorf("expected a Service resource and got: %v", svc))
 	}
 
 	esiConfig.Service = types.NamespacedName{

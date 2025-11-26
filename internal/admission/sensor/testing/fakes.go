@@ -1,7 +1,7 @@
 package testing
 
 import (
-	sensor "github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
+	sensor "github.com/argoproj/argo-events/pkg/apis/events/v1alpha1"
 )
 
 type FakeRateLimitGetter struct {

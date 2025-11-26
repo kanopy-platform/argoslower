@@ -14,8 +14,7 @@ import (
 
 	perrs "github.com/kanopy-platform/argoslower/pkg/errors"
 
-	common "github.com/argoproj/argo-events/pkg/apis/common"
-	esv1alpha1 "github.com/argoproj/argo-events/pkg/apis/eventsource/v1alpha1"
+	esv1alpha1 "github.com/argoproj/argo-events/pkg/apis/events/v1alpha1"
 )
 
 const DefaultAnnotationKey string = "v1alpha1.argoslower.kanopy-platform/known-source"
@@ -23,7 +22,7 @@ const DefaultAnnotationKey string = "v1alpha1.argoslower.kanopy-platform/known-s
 type Handler struct {
 	annotationKey string
 	meshChecker   MeshChecker
-	decoder       *admission.Decoder
+	decoder       admission.Decoder
 	knownSources  map[string]bool
 }
 
@@ -45,7 +44,7 @@ func (h *Handler) SetupWithManager(m manager.Manager) {
 	m.GetWebhookServer().Register("/mutate/eventsource", &webhook.Admission{Handler: h})
 }
 
-func (h *Handler) InjectDecoder(decoder *admission.Decoder) error {
+func (h *Handler) InjectDecoder(decoder admission.Decoder) error {
 	if decoder == nil {
 		return fmt.Errorf("decoder cannot be nil")
 	}
@@ -106,7 +105,7 @@ func setIstioLabel(in *esv1alpha1.Template) *esv1alpha1.Template {
 	}
 
 	if out.Metadata == nil {
-		out.Metadata = &common.Metadata{}
+		out.Metadata = &esv1alpha1.Metadata{}
 	}
 
 	if out.Metadata.Labels == nil {
@@ -135,7 +134,7 @@ func ValidateEventSource(es *esv1alpha1.EventSource) error {
 		for hook, spec := range es.Spec.Webhook {
 			e := validateWebhookEventSource(&spec)
 			if e != nil {
-				err = perrs.NewUnretryableError(errors.Join(err, fmt.Errorf("Webhook %s misconfigured: %w", hook, e)))
+				err = perrs.NewUnretryableError(errors.Join(err, fmt.Errorf("webhook %s misconfigured: %w", hook, e)))
 			}
 		}
 
@@ -150,7 +149,7 @@ func ValidateEventSource(es *esv1alpha1.EventSource) error {
 		for hook, spec := range es.Spec.Github {
 			e := validateGithubEventSource(&spec)
 			if e != nil {
-				err = perrs.NewUnretryableError(errors.Join(err, fmt.Errorf("Github webhook %s misconfigured: %w", hook, e)))
+				err = perrs.NewUnretryableError(errors.Join(err, fmt.Errorf("github webhook %s misconfigured: %w", hook, e)))
 			}
 		}
 
@@ -166,7 +165,7 @@ func ValidateEventSource(es *esv1alpha1.EventSource) error {
 func validateWebhookEventSource(spec *esv1alpha1.WebhookEventSource) error {
 	// This is Bearer token authentication provided by argo-events
 	if spec.AuthSecret == nil {
-		return perrs.NewUnretryableError(fmt.Errorf("Webhook EventSources require auth tokens. Ensure an authSecret secret selector configured."))
+		return perrs.NewUnretryableError(fmt.Errorf("webhook EventSources require auth tokens. Ensure an authSecret secret selector configured"))
 	}
 
 	return nil
@@ -177,7 +176,7 @@ func validateGithubEventSource(spec *esv1alpha1.GithubEventSource) error {
 	// verification is implemented by argo-events
 	// https://github.com/argoproj/argo-events/blob/e948d7337aec619dd48fb2a065126b025ed9281d/eventsources/sources/github/start.go#L383
 	if spec.WebhookSecret == nil {
-		return perrs.NewUnretryableError(fmt.Errorf("Github webhook EventSources require HMAC signing validation for ingress. Ensure a webhookSecret secret selector is provided."))
+		return perrs.NewUnretryableError(fmt.Errorf("github webhook EventSources require HMAC signing validation for ingress. Ensure a webhookSecret secret selector is provided"))
 	}
 
 	return nil

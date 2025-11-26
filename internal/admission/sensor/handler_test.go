@@ -8,7 +8,7 @@ import (
 
 	stest "github.com/kanopy-platform/argoslower/internal/admission/sensor/testing"
 
-	sensor "github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
+	sensor "github.com/argoproj/argo-events/pkg/apis/events/v1alpha1"
 	"github.com/kanopy-platform/argoslower/pkg/ratelimit"
 	"github.com/stretchr/testify/assert"
 	admissionv1 "k8s.io/api/admission/v1"

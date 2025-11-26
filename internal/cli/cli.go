@@ -49,12 +49,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	sensor "github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
-
-	eventscommon "github.com/argoproj/argo-events/common"
-	eventsource "github.com/argoproj/argo-events/pkg/apis/eventsource/v1alpha1"
-	esclient "github.com/argoproj/argo-events/pkg/client/eventsource/clientset/versioned"
-	esinformerv1alpha1 "github.com/argoproj/argo-events/pkg/client/eventsource/informers/externalversions"
+	eventsv1alpha1 "github.com/argoproj/argo-events/pkg/apis/events/v1alpha1"
+	eventsclient "github.com/argoproj/argo-events/pkg/client/clientset/versioned"
+	eventsinformer "github.com/argoproj/argo-events/pkg/client/informers/externalversions"
 
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
 	istioinformer "istio.io/client-go/pkg/informers/externalversions"
@@ -68,8 +65,7 @@ var (
 )
 
 func setupScheme() {
-	utilruntime.Must(sensor.AddToScheme(scheme))
-	utilruntime.Must(eventsource.AddToScheme(scheme))
+	utilruntime.Must(eventsv1alpha1.AddToScheme(scheme))
 }
 
 type RootCommand struct {
@@ -186,8 +182,8 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	esc := esclient.NewForConfigOrDie(cfg)
-	esinformerFactory := esinformerv1alpha1.NewSharedInformerFactoryWithOptions(esc, 1*time.Minute)
+	esc := eventsclient.NewForConfigOrDie(cfg)
+	esinformerFactory := eventsinformer.NewSharedInformerFactoryWithOptions(esc, 1*time.Minute)
 
 	esi := esinformerFactory.Argoproj().V1alpha1().EventSources()
 
@@ -224,7 +220,7 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 
 	if viper.GetBool("enable-webhook-controller") {
 		//creater a filtered informer for resources with the event-source labal
-		selector := eventscommon.LabelEventSourceName
+		selector := eventsv1alpha1.LabelEventSourceName
 		_, err = labels.Parse(selector)
 		if err != nil {
 			return err
@@ -274,7 +270,7 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 
 		gws := stringutils.StringToMap(viper.GetString("gateway-selector"), ",", "=")
 		if len(gws) == 0 {
-			return fmt.Errorf("Invalid gateway-selector: %s", viper.GetString("gateway-selector"))
+			return fmt.Errorf("invalid gateway-selector: %s", viper.GetString("gateway-selector"))
 		}
 
 		ingressClient := ic.NewClient(istioCS, gws)
@@ -318,7 +314,10 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		if e := ctrl.Watch(&source.Informer{Informer: esi.Informer()}, &handler.EnqueueRequestForObject{}); e != nil {
+		if e := ctrl.Watch(&source.Informer{
+			Informer: esi.Informer(),
+			Handler:  &handler.EnqueueRequestForObject{},
+		}); e != nil {
 			return e
 		}
 	}
@@ -361,7 +360,7 @@ func configureHooks(esic *esctrl.EventSourceIngressController, config map[string
 			esic.SetIPGetter(hook, g)
 
 		default:
-			err := fmt.Errorf("Unkonwn webhook provider type %s", provider)
+			err := fmt.Errorf("unknown webhook provider type %s", provider)
 			klog.Log.Error(err, err.Error())
 			return err
 		}

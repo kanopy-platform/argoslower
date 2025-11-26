@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	sensor "github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
+	sensor "github.com/argoproj/argo-events/pkg/apis/events/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
