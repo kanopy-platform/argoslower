@@ -11,14 +11,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	sensorv1alpha1 "github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
+	sensorv1alpha1 "github.com/argoproj/argo-events/pkg/apis/events/v1alpha1"
 	"github.com/kanopy-platform/argoslower/pkg/ratelimit"
 )
 
 type Handler struct {
 	rlg     RateLimitGetter
 	drlc    *ratelimit.RateLimitCalculator
-	decoder *admission.Decoder
+	decoder admission.Decoder
 }
 
 func NewHandler(rlg RateLimitGetter, drlc *ratelimit.RateLimitCalculator) *Handler {
@@ -32,7 +32,7 @@ func (h *Handler) SetupWithManager(m manager.Manager) {
 	m.GetWebhookServer().Register("/mutate", &webhook.Admission{Handler: h})
 }
 
-func (h *Handler) InjectDecoder(decoder *admission.Decoder) error {
+func (h *Handler) InjectDecoder(decoder admission.Decoder) error {
 	if decoder == nil {
 		return fmt.Errorf("decoder cannot be nil")
 	}

@@ -28,7 +28,7 @@ func (i *CachedIPLister) GetIPs() ([]string, error) {
 	var out []string
 	var err error
 	if i.lister == nil {
-		return out, fmt.Errorf("No lister configured")
+		return out, fmt.Errorf("no lister configured")
 	}
 	syncNow := i.needSync()
 

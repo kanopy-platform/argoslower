@@ -48,7 +48,7 @@ func (i *IstioClient) Remove(ctx context.Context, config *v1.EventSourceIngressC
 	net := i.client.NetworkingV1beta1()
 
 	if config == nil || config.Eventsource.Name == "" || config.Eventsource.Namespace == "" || config.AdminNamespace == "" || config.Gateway.Namespace == "" {
-		return perrs.NewUnretryableError(fmt.Errorf("Empty namespaced name for event source"))
+		return perrs.NewUnretryableError(fmt.Errorf("empty namespaced name for event source"))
 	}
 
 	selector := fmt.Sprintf("%s=%s,%s=%s", common.EventSourceNameString, config.Eventsource.Name, common.EventSourceNamespaceString, config.Eventsource.Namespace)
@@ -78,7 +78,7 @@ func (i *IstioClient) Remove(ctx context.Context, config *v1.EventSourceIngressC
 		return nil
 	}
 
-	return perrs.NewRetryableError(fmt.Errorf("Deleteion errors for selector %s: %s", selector, errString))
+	return perrs.NewRetryableError(fmt.Errorf("deletion errors for selector %s: %s", selector, errString))
 }
 
 // UpsertFromConfig creates or updates Virtual Serivces associated with an IstioConfig
@@ -89,7 +89,7 @@ func (i *IstioClient) upsertFromConfig(config *IstioConfig) (*isnetv1beta1.Virtu
 	net := i.client.NetworkingV1beta1()
 
 	if !config.IsConfigured() {
-		return nil, nil, perrs.NewUnretryableError(errors.New("Unable to configure ingress"))
+		return nil, nil, perrs.NewUnretryableError(errors.New("unable to configure ingress"))
 	}
 
 	vs := config.GetVirtualService()
@@ -130,7 +130,7 @@ func (i *IstioClient) Configure(ctx context.Context, config *v1.EventSourceIngre
 	out := []types.NamespacedName{}
 
 	if config == nil {
-		return out, perrs.NewUnretryableError(fmt.Errorf("Nil config"))
+		return out, perrs.NewUnretryableError(fmt.Errorf("nil config"))
 	}
 
 	cidrs, err := config.IPGetter.GetIPs()
@@ -140,7 +140,7 @@ func (i *IstioClient) Configure(ctx context.Context, config *v1.EventSourceIngre
 	}
 
 	if len(cidrs) == 0 {
-		e := fmt.Errorf("Failed to source IPs for %s", config.Eventsource.String())
+		e := fmt.Errorf("failed to source IPs for %s", config.Eventsource.String())
 		log.V(1).Info(e.Error())
 		return out, perrs.NewRetryableError(e)
 	}
@@ -292,7 +292,7 @@ func (ic *IstioConfig) ConfigureVS(url string, gw, svc, es types.NamespacedName,
 	}
 
 	if len(routes) == 0 {
-		return fmt.Errorf("No viable routes for EventSource %s and Service %s", es.String(), svc.String())
+		return fmt.Errorf("no viable routes for EventSource %s and Service %s", es.String(), svc.String())
 	}
 
 	vs.Spec.Http = routes
@@ -334,7 +334,7 @@ func (ic *IstioConfig) ConfigureAP(adminns, url string, nsn types.NamespacedName
 		index++
 	}
 	if len(paths) == 0 {
-		return fmt.Errorf("EventSource %s has no valid paths for its service configuration.", nsn.String())
+		return fmt.Errorf("eventSource %s has no valid paths for its service configuration", nsn.String())
 	}
 
 	source := &secv1beta1.Source{}

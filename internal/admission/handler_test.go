@@ -17,20 +17,17 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	aes "github.com/argoproj/argo-events/pkg/apis/eventsource"
-	v1eventsource "github.com/argoproj/argo-events/pkg/apis/eventsource/v1alpha1"
-	as "github.com/argoproj/argo-events/pkg/apis/sensor"
-	v1sensor "github.com/argoproj/argo-events/pkg/apis/sensor/v1alpha1"
+	eventsv1alpha1 "github.com/argoproj/argo-events/pkg/apis/events/v1alpha1"
 )
 
 func TestRoutingHandler(t *testing.T) {
 
-	s := v1sensor.Sensor{
+	s := eventsv1alpha1.Sensor{
 		ObjectMeta: v1.ObjectMeta{
 			Namespace: "test",
 			Name:      "test",
 		},
-		Spec: v1sensor.SensorSpec{},
+		Spec: eventsv1alpha1.SensorSpec{},
 	}
 
 	sensorBytes, err := json.Marshal(s)
@@ -42,12 +39,12 @@ func TestRoutingHandler(t *testing.T) {
 		},
 	}
 
-	es := v1eventsource.EventSource{
+	es := eventsv1alpha1.EventSource{
 		ObjectMeta: v1.ObjectMeta{
 			Namespace: "test",
 			Name:      "test",
 		},
-		Spec: v1eventsource.EventSourceSpec{},
+		Spec: eventsv1alpha1.EventSourceSpec{},
 	}
 
 	eventSourceBytes, err := json.Marshal(es)
@@ -94,7 +91,7 @@ func TestRoutingHandler(t *testing.T) {
 
 		sck := sar.DeepCopy()
 		skind := v1.GroupVersionKind{
-			Kind: as.Kind,
+			Kind: eventsv1alpha1.SensorGroupVersionKind.Kind,
 		}
 		sck.Kind = skind
 		sck.RequestKind = &skind
@@ -108,7 +105,7 @@ func TestRoutingHandler(t *testing.T) {
 
 		esck := esar.DeepCopy()
 		eskind := v1.GroupVersionKind{
-			Kind: aes.Kind,
+			Kind: eventsv1alpha1.EventSourceGroupVersionKind.Kind,
 		}
 		esck.Kind = eskind
 		esck.RequestKind = &eskind

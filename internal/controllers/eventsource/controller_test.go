@@ -8,8 +8,8 @@ import (
 	ingresscommon "github.com/kanopy-platform/argoslower/pkg/ingress"
 	v1 "github.com/kanopy-platform/argoslower/pkg/ingress/v1"
 
-	esv1alpha1 "github.com/argoproj/argo-events/pkg/apis/eventsource/v1alpha1"
-	eslister "github.com/argoproj/argo-events/pkg/client/eventsource/listers/eventsource/v1alpha1"
+	esv1alpha1 "github.com/argoproj/argo-events/pkg/apis/events/v1alpha1"
+	eslister "github.com/argoproj/argo-events/pkg/client/listers/events/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"

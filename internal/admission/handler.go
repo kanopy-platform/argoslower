@@ -4,8 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	aes "github.com/argoproj/argo-events/pkg/apis/eventsource"
-	as "github.com/argoproj/argo-events/pkg/apis/sensor"
+	eventsv1alpha1 "github.com/argoproj/argo-events/pkg/apis/events/v1alpha1"
 	event "github.com/kanopy-platform/argoslower/internal/admission/eventsource"
 	sensor "github.com/kanopy-platform/argoslower/internal/admission/sensor"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -32,9 +31,9 @@ func (h *RoutingHandler) Handle(ctx context.Context, req admission.Request) admi
 	}
 
 	switch {
-	case kind.Kind == aes.Kind && h.eventSourceHandler != nil:
+	case kind.Kind == eventsv1alpha1.EventSourceGroupVersionKind.Kind && h.eventSourceHandler != nil:
 		return h.eventSourceHandler.Handle(ctx, req)
-	case kind.Kind == as.Kind && h.sensorHandler != nil:
+	case kind.Kind == eventsv1alpha1.SensorGroupVersionKind.Kind && h.sensorHandler != nil:
 		return h.sensorHandler.Handle(ctx, req)
 	default:
 		return admission.Denied(fmt.Sprintf("Kind %s not supported by controller", kind.Kind))
@@ -42,7 +41,7 @@ func (h *RoutingHandler) Handle(ctx context.Context, req admission.Request) admi
 
 }
 
-func (h *RoutingHandler) InjectDecoder(decoder *admission.Decoder) error {
+func (h *RoutingHandler) InjectDecoder(decoder admission.Decoder) error {
 	if h.sensorHandler != nil {
 		err := h.sensorHandler.InjectDecoder(decoder)
 		if err != nil {

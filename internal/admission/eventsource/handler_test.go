@@ -18,8 +18,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	common "github.com/argoproj/argo-events/pkg/apis/common"
-	esv1alpha1 "github.com/argoproj/argo-events/pkg/apis/eventsource/v1alpha1"
+	esv1alpha1 "github.com/argoproj/argo-events/pkg/apis/events/v1alpha1"
 )
 
 func TestEventSourceHandler(t *testing.T) {
@@ -68,7 +67,7 @@ func TestEventSourceHandler(t *testing.T) {
 						},
 					},
 					Template: &esv1alpha1.Template{
-						Metadata: &common.Metadata{
+						Metadata: &esv1alpha1.Metadata{
 							Labels: map[string]string{
 								"sidecar.istio.io/inject": "false",
 							},
@@ -154,31 +153,31 @@ func TestEventSourceHandler(t *testing.T) {
 		fmc.Err = nil
 
 		if test.nsErr != nil {
-			assert.False(t, resp.AdmissionResponse.Allowed, test.name)
-			assert.Equal(t, test.nsErr.Error(), resp.AdmissionResponse.Result.Message, test.name)
+			assert.False(t, resp.Allowed, test.name)
+			assert.Equal(t, test.nsErr.Error(), resp.Result.Message, test.name)
 			continue
 		}
 
-		_, ok := test.es.ObjectMeta.Annotations[test.key]
+		_, ok := test.es.Annotations[test.key]
 		if !ok {
-			assert.True(t, resp.AdmissionResponse.Allowed, test.name)
+			assert.True(t, resp.Allowed, test.name)
 			assert.Equal(t, 0, len(resp.Patches), test.name)
 			continue
 		}
 
 		if test.err {
-			assert.False(t, resp.AdmissionResponse.Allowed, test.name)
-			assert.Contains(t, resp.AdmissionResponse.Result.Reason, "Forbidden", test.name)
-			assert.Contains(t, resp.AdmissionResponse.Result.Message, "Unknown webhook source", test.name)
+			assert.False(t, resp.Allowed, test.name)
+			assert.Contains(t, resp.Result.Reason, "Forbidden", test.name)
+			assert.Contains(t, resp.Result.Message, "Unknown webhook source", test.name)
 			continue
 		}
 
 		if test.nsOnMesh != nil {
-			assert.False(t, resp.AdmissionResponse.Allowed, test.name)
+			assert.False(t, resp.Allowed, test.name)
 			continue
 		}
 
-		assert.True(t, resp.AdmissionResponse.Allowed, test.name)
+		assert.True(t, resp.Allowed, test.name)
 		assert.Equal(t, 1, len(resp.Patches), test.name)
 	}
 }
