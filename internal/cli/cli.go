@@ -249,7 +249,7 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 		})
 		filteredIstioInformerFactory := istioinformer.NewSharedInformerFactoryWithOptions(istioCS, 1*time.Minute, istioOptions)
 
-		filteredVirtualServiceInfomer := filteredIstioInformerFactory.Networking().V1beta1().VirtualServices().Informer()
+		filteredVirtualServiceInfomer := filteredIstioInformerFactory.Networking().V1().VirtualServices().Informer()
 		_, err = filteredVirtualServiceInfomer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc: func(new interface{}) {},
 		})
@@ -257,7 +257,7 @@ func (c *RootCommand) runE(cmd *cobra.Command, args []string) error {
 			klog.Log.Error(err, "unable to add event handler to the filtered virtualService informer")
 		}
 
-		filteredAuthorizationPolicyInformer := filteredIstioInformerFactory.Security().V1beta1().AuthorizationPolicies().Informer()
+		filteredAuthorizationPolicyInformer := filteredIstioInformerFactory.Security().V1().AuthorizationPolicies().Informer()
 		_, err = filteredAuthorizationPolicyInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 			AddFunc: func(new interface{}) {},
 		})
