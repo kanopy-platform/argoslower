@@ -82,20 +82,11 @@ func (e *EventSourceIngressController) Reconcile(ctx context.Context, req ctrl.R
 	eventSource, err := e.esLister.EventSources(req.Namespace).Get(req.Name)
 	if err != nil && !k8serror.IsNotFound(err) {
 		log.Error(err, fmt.Sprintf("unable to get eventsource %v", req))
-		return ctrl.Result{
-			Requeue: true,
-		}, err
+		return ctrl.Result{}, err
 	}
 
 	if err = e.reconcile(ctx, eventSource.DeepCopy(), req.NamespacedName); err != nil {
-		var retry bool
-		rerr, ok := err.(*perrs.RetryableError)
-		if ok {
-			retry = rerr.IsRetryable()
-		}
-		return ctrl.Result{
-			Requeue: retry,
-		}, err
+		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil

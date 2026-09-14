@@ -12,13 +12,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	netv1beta1 "istio.io/api/networking/v1beta1"
-	secv1beta1 "istio.io/api/security/v1beta1"
+	apinetworkingv1 "istio.io/api/networking/v1"
+	apisecurityv1 "istio.io/api/security/v1"
 	isv1beta1 "istio.io/api/type/v1beta1"
-	isnetv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
-	issecv1beta1 "istio.io/client-go/pkg/apis/security/v1beta1"
-	netapplyv1beta1 "istio.io/client-go/pkg/applyconfiguration/networking/v1beta1"
-	secapplyv1beta1 "istio.io/client-go/pkg/applyconfiguration/security/v1beta1"
+	networkingv1 "istio.io/client-go/pkg/apis/networking/v1"
+	securityv1 "istio.io/client-go/pkg/apis/security/v1"
+	netapplyv1 "istio.io/client-go/pkg/applyconfiguration/networking/v1"
+	secapplyv1 "istio.io/client-go/pkg/applyconfiguration/security/v1"
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
 
 	perrs "github.com/kanopy-platform/argoslower/pkg/errors"
@@ -44,8 +44,8 @@ func (i *IstioClient) Remove(ctx context.Context, config *v1.EventSourceIngressC
 
 	log := log.FromContext(ctx)
 
-	sec := i.client.SecurityV1beta1()
-	net := i.client.NetworkingV1beta1()
+	sec := i.client.SecurityV1()
+	net := i.client.NetworkingV1()
 
 	if config == nil || config.Eventsource.Name == "" || config.Eventsource.Namespace == "" || config.AdminNamespace == "" || config.Gateway.Namespace == "" {
 		return perrs.NewUnretryableError(fmt.Errorf("empty namespaced name for event source"))
@@ -83,28 +83,28 @@ func (i *IstioClient) Remove(ctx context.Context, config *v1.EventSourceIngressC
 
 // UpsertFromConfig creates or updates Virtual Serivces associated with an IstioConfig
 // It returns an error for unconfigured IstioConfigs
-func (i *IstioClient) upsertFromConfig(config *IstioConfig) (*isnetv1beta1.VirtualService, *issecv1beta1.AuthorizationPolicy, error) {
+func (i *IstioClient) upsertFromConfig(config *IstioConfig) (*networkingv1.VirtualService, *securityv1.AuthorizationPolicy, error) {
 
-	sec := i.client.SecurityV1beta1()
-	net := i.client.NetworkingV1beta1()
+	sec := i.client.SecurityV1()
+	net := i.client.NetworkingV1()
 
 	if !config.IsConfigured() {
 		return nil, nil, perrs.NewUnretryableError(errors.New("unable to configure ingress"))
 	}
 
 	vs := config.GetVirtualService()
-	vsapply := netapplyv1beta1.VirtualService(vs.Name, vs.Namespace).
+	vsapply := netapplyv1.VirtualService(vs.Name, vs.Namespace).
 		WithLabels(vs.Labels).
 		WithAnnotations(vs.Annotations)
 
-	// the netapplyv1beta1.VirtualServiceApplyConfiguration.WithSpec function copies locks by passing a VirtualService Spec by value
+	// the netapplyv1.VirtualServiceApplyConfiguration.WithSpec function copies locks by passing a VirtualService Spec by value
 	vsapply.Spec = &vs.Spec
 
 	ap := config.GetAuthorizationPolicy()
-	apapply := secapplyv1beta1.AuthorizationPolicy(ap.Name, ap.Namespace).
+	apapply := secapplyv1.AuthorizationPolicy(ap.Name, ap.Namespace).
 		WithLabels(ap.Labels).
 		WithAnnotations(ap.Annotations)
-	// the secapplyv1beta1.AuhtorizationPolicyApplyConfiguration.WithSpec function copies locks by passing a VirtualService Spec by value
+	// the secapplyv1.AuhtorizationPolicyApplyConfiguration.WithSpec function copies locks by passing a VirtualService Spec by value
 	apapply.Spec = &ap.Spec
 
 	applyOpts := metav1.ApplyOptions{
@@ -169,8 +169,8 @@ func (i *IstioClient) Configure(ctx context.Context, config *v1.EventSourceIngre
 // IstioConfig contains global configuration for rendering istio VirtualService and AuthorizationPolicy
 // resources from a port to endpoint mapping.
 type IstioConfig struct {
-	ap *issecv1beta1.AuthorizationPolicy
-	vs *isnetv1beta1.VirtualService
+	ap *securityv1.AuthorizationPolicy
+	vs *networkingv1.VirtualService
 }
 
 func NewIstioConfig() *IstioConfig {
@@ -179,13 +179,13 @@ func NewIstioConfig() *IstioConfig {
 
 // GetVirtualService returns the current configured or unconfigured virtual service
 // if the virtual service is unconfigured it is nil.
-func (ic *IstioConfig) GetVirtualService() *isnetv1beta1.VirtualService {
+func (ic *IstioConfig) GetVirtualService() *networkingv1.VirtualService {
 	return ic.vs.DeepCopy()
 }
 
 // GetAuthorizationPolicy returns the current configured or unconfigured authorization
 // policy if the authorization policy is unconfigured it is nil.
-func (ic *IstioConfig) GetAuthorizationPolicy() *issecv1beta1.AuthorizationPolicy {
+func (ic *IstioConfig) GetAuthorizationPolicy() *securityv1.AuthorizationPolicy {
 	return ic.ap.DeepCopy()
 }
 
@@ -210,8 +210,8 @@ func (ic *IstioConfig) ConfigureVS(url string, gw, svc, es types.NamespacedName,
 	pathPrefix := fmt.Sprintf("/%s/%s", es.Namespace, es.Name)
 	svcHost := fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, svc.Namespace)
 
-	vs := isnetv1beta1.VirtualService{
-		Spec: netv1beta1.VirtualService{
+	vs := networkingv1.VirtualService{
+		Spec: apinetworkingv1.VirtualService{
 			Hosts:    []string{host},
 			Gateways: []string{gw.String()},
 		},
@@ -224,7 +224,7 @@ func (ic *IstioConfig) ConfigureVS(url string, gw, svc, es types.NamespacedName,
 		common.EventSourceNamespaceString: es.Namespace,
 	}
 
-	routes := make([]*netv1beta1.HTTPRoute, len(endpoints)*2)
+	routes := make([]*apinetworkingv1.HTTPRoute, len(endpoints)*2)
 	index := 0
 	for port, endpoint := range endpoints {
 		uport64, err := strconv.ParseUint(port, 10, 32)
@@ -233,26 +233,26 @@ func (ic *IstioConfig) ConfigureVS(url string, gw, svc, es types.NamespacedName,
 		}
 		uport := uint32(uport64)
 
-		routes[index] = &netv1beta1.HTTPRoute{
+		routes[index] = &apinetworkingv1.HTTPRoute{
 			Name: endpoint.Name,
-			DirectResponse: &netv1beta1.HTTPDirectResponse{
+			DirectResponse: &apinetworkingv1.HTTPDirectResponse{
 				Status: 400,
-				Body: &netv1beta1.HTTPBody{
-					Specifier: &netv1beta1.HTTPBody_Bytes{
+				Body: &apinetworkingv1.HTTPBody{
+					Specifier: &apinetworkingv1.HTTPBody_Bytes{
 						Bytes: []byte(`{"error":"invalid_request","error_description":"secret too short"}`),
 					},
 				},
 			},
-			Match: []*netv1beta1.HTTPMatchRequest{
-				&netv1beta1.HTTPMatchRequest{
-					Uri: &netv1beta1.StringMatch{
-						MatchType: &netv1beta1.StringMatch_Prefix{
+			Match: []*apinetworkingv1.HTTPMatchRequest{
+				&apinetworkingv1.HTTPMatchRequest{
+					Uri: &apinetworkingv1.StringMatch{
+						MatchType: &apinetworkingv1.StringMatch_Prefix{
 							Prefix: fmt.Sprintf("%s%s/", pathPrefix, endpoint.Path),
 						},
 					},
-					Headers: map[string]*netv1beta1.StringMatch{
-						"authorization": &netv1beta1.StringMatch{
-							MatchType: &netv1beta1.StringMatch_Regex{
+					Headers: map[string]*apinetworkingv1.StringMatch{
+						"authorization": &apinetworkingv1.StringMatch{
+							MatchType: &apinetworkingv1.StringMatch_Regex{
 								// This regex is lax compared to the spec from
 								// https://tools.ietf.org/html/rfc6750#section-2.1
 								// but it aligns with the desired length requirements
@@ -265,28 +265,28 @@ func (ic *IstioConfig) ConfigureVS(url string, gw, svc, es types.NamespacedName,
 			},
 		}
 		index++
-		routes[index] = &netv1beta1.HTTPRoute{
+		routes[index] = &apinetworkingv1.HTTPRoute{
 			Name: endpoint.Name,
-			Route: []*netv1beta1.HTTPRouteDestination{
-				&netv1beta1.HTTPRouteDestination{
-					Destination: &netv1beta1.Destination{
+			Route: []*apinetworkingv1.HTTPRouteDestination{
+				&apinetworkingv1.HTTPRouteDestination{
+					Destination: &apinetworkingv1.Destination{
 						Host: svcHost,
-						Port: &netv1beta1.PortSelector{
+						Port: &apinetworkingv1.PortSelector{
 							Number: uport,
 						},
 					},
 				},
 			},
-			Match: []*netv1beta1.HTTPMatchRequest{
-				&netv1beta1.HTTPMatchRequest{
-					Uri: &netv1beta1.StringMatch{
-						MatchType: &netv1beta1.StringMatch_Prefix{
+			Match: []*apinetworkingv1.HTTPMatchRequest{
+				&apinetworkingv1.HTTPMatchRequest{
+					Uri: &apinetworkingv1.StringMatch{
+						MatchType: &apinetworkingv1.StringMatch_Prefix{
 							Prefix: fmt.Sprintf("%s%s/", pathPrefix, endpoint.Path),
 						},
 					},
 				},
 			},
-			Rewrite: &netv1beta1.HTTPRewrite{Uri: "/"},
+			Rewrite: &apinetworkingv1.HTTPRewrite{Uri: "/"},
 		}
 		index++
 	}
@@ -312,12 +312,12 @@ func (ic *IstioConfig) ConfigureAP(adminns, url string, nsn types.NamespacedName
 	pathPrefix := fmt.Sprintf("/%s/%s", nsn.Namespace, nsn.Name)
 	matcher := maps.Clone(gws)
 
-	ap := issecv1beta1.AuthorizationPolicy{
-		Spec: secv1beta1.AuthorizationPolicy{
+	ap := securityv1.AuthorizationPolicy{
+		Spec: apisecurityv1.AuthorizationPolicy{
 			Selector: &isv1beta1.WorkloadSelector{
 				MatchLabels: matcher,
 			},
-			Action: secv1beta1.AuthorizationPolicy_DENY,
+			Action: apisecurityv1.AuthorizationPolicy_DENY,
 		},
 	}
 	ap.Name = fmt.Sprintf("%s-%s", nsn.Namespace, nsn.Name)
@@ -337,22 +337,22 @@ func (ic *IstioConfig) ConfigureAP(adminns, url string, nsn types.NamespacedName
 		return fmt.Errorf("eventSource %s has no valid paths for its service configuration", nsn.String())
 	}
 
-	source := &secv1beta1.Source{}
-	if ap.Spec.Action == secv1beta1.AuthorizationPolicy_DENY {
+	source := &apisecurityv1.Source{}
+	if ap.Spec.Action == apisecurityv1.AuthorizationPolicy_DENY {
 		source.NotIpBlocks = cidrs
 	} else {
 		source.IpBlocks = cidrs
 	}
 
-	rule := &secv1beta1.Rule{
-		From: []*secv1beta1.Rule_From{
-			&secv1beta1.Rule_From{
+	rule := &apisecurityv1.Rule{
+		From: []*apisecurityv1.Rule_From{
+			&apisecurityv1.Rule_From{
 				Source: source,
 			},
 		},
-		To: []*secv1beta1.Rule_To{
-			&secv1beta1.Rule_To{
-				Operation: &secv1beta1.Operation{
+		To: []*apisecurityv1.Rule_To{
+			&apisecurityv1.Rule_To{
+				Operation: &apisecurityv1.Operation{
 					Hosts: []string{
 						url,
 						fmt.Sprintf("%s:*", url),
